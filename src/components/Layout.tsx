@@ -113,6 +113,18 @@ export function Layout() {
       setQuery('');
       return;
     }
+    const po = state.purchaseOrders.find(
+      (p) =>
+        p.number.includes(q.replace(/^#/, '')) ||
+        p.id === q ||
+        `po-${p.number}`.includes(q) ||
+        `po #${p.number}`.includes(q),
+    );
+    if (po) {
+      navigate(`/purchase-orders?open=${po.id}`);
+      setQuery('');
+      return;
+    }
     if (q.includes('po') || q.includes('purchase')) {
       navigate('/purchase-orders');
       setQuery('');
@@ -122,7 +134,7 @@ export function Layout() {
       (i) => i.number.includes(q) || `inv-${i.number}`.includes(q),
     );
     if (inv) {
-      navigate('/invoices');
+      navigate(`/invoices?open=${inv.id}`);
       setQuery('');
       return;
     }

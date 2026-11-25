@@ -16,6 +16,7 @@ export function Invoices() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [tab, setTab] = useState<'all' | Invoice['status']>('all');
+  const [query, setQuery] = useState('');
   const [payInv, setPayInv] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState('Check');
@@ -37,14 +38,32 @@ export function Invoices() {
     if (params.get('new') === '1') {
       openNew(params.get('customer') ?? undefined);
       setParams({}, { replace: true });
+      return;
+    }
+    const openId = params.get('open');
+    if (openId) {
+      const inv = state.invoices.find((i) => i.id === openId || i.number === openId);
+      if (inv) openEdit(inv);
+      setParams({}, { replace: true });
     }
   }, [params, setParams]);
 
   const filtered = useMemo(() => {
-    const list = [...state.invoices].sort((a, b) => b.date.localeCompare(a.date));
-    if (tab === 'all') return list;
-    return list.filter((i) => i.status === tab);
-  }, [state.invoices, tab]);
+    let list = [...state.invoices].sort((a, b) => b.date.localeCompare(a.date));
+    if (tab !== 'all') list = list.filter((i) => i.status === tab);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((inv) => {
+        const customer = state.customers.find((c) => c.id === inv.customerId);
+        return (
+          inv.number.includes(q) ||
+          customer?.name.toLowerCase().includes(q) ||
+          customer?.company?.toLowerCase().includes(q)
+        );
+      });
+    }
+    return list;
+  }, [state.invoices, state.customers, tab, query]);
 
   function openNew(presetCustomer?: string) {
     setEditing(null);
@@ -151,17 +170,26 @@ export function Invoices() {
         </button>
       </div>
 
-      <div className="tabs">
-        {(['all', 'draft', 'sent', 'partial', 'overdue', 'paid'] as const).map((t) => (
-          <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'all' ? 'All' : t}
-          </button>
-        ))}
+      <div className="list-toolbar">
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          {(['all', 'draft', 'sent', 'partial', 'overdue', 'paid'] as const).map((t) => (
+            <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+              {t === 'all' ? 'All' : t}
+            </button>
+          ))}
+        </div>
+        <input
+          className="list-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by invoice # or customer"
+          aria-label="Filter invoices"
+        />
       </div>
 
       <div className="panel">
         <div className="table-wrap">
-          <table className="data">
+          <table className="data data-clickable">
             <thead>
               <tr>
                 <th>Date</th>
@@ -180,9 +208,19 @@ export function Invoices() {
                 const customer = state.customers.find((c) => c.id === inv.customerId);
                 const loc = state.locations.find((l) => l.id === inv.locationId);
                 return (
-                  <tr key={inv.id}>
+                  <tr key={inv.id} onClick={() => openEdit(inv)}>
                     <td>{shortDate(inv.date)}</td>
-                    <td style={{ fontWeight: 700 }}>#{inv.number}</td>
+                    <td style={{ fontWeight: 700 }}>
+                      <button
+                        className="linkish"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(inv);
+                        }}
+                      >
+                        #{inv.number}
+                      </button>
+                    </td>
                     <td>{customer?.name}</td>
                     <td>{loc?.code ?? '—'}</td>
                     <td>{shortDate(inv.dueDate)}</td>
@@ -191,7 +229,7 @@ export function Invoices() {
                     </td>
                     <td className="num">{money(inv.total)}</td>
                     <td className="num">{money(inv.balance)}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => openEdit(inv)}>
                           Open
@@ -214,7 +252,12 @@ export function Invoices() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="empty">
-                    No invoices in this view.
+                    <div className="empty-cta">
+                      <div>No invoices in this view.</div>
+                      <button className="btn btn-primary" onClick={() => openNew()}>
+                        Create invoice
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : null}
@@ -392,10 +435,16 @@ export function Invoices() {
             >
               + Line
             </button>
-            <div style={{ textAlign: 'right', marginTop: 12 }}>
-              <div>Subtotal {money(totals.subtotal)}</div>
-              <div>Tax {money(totals.tax)}</div>
-              <div style={{ fontWeight: 700 }}>Total {money(totals.total)}</div>
+            <div className="doc-totals">
+              <div>
+                Subtotal <strong>{money(totals.subtotal)}</strong>
+              </div>
+              <div>
+                Tax <strong>{money(totals.tax)}</strong>
+              </div>
+              <div className="doc-total">
+                Total <strong>{money(totals.total)}</strong>
+              </div>
             </div>
           </div>
 

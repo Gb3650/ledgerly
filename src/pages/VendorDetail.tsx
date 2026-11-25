@@ -38,7 +38,7 @@ export function VendorDetail() {
             {vendor.category} · {vendor.email || 'No email'} · Open {money(vendor.balance)}
           </p>
         </div>
-        <Link className="btn btn-primary" to="/purchase-orders">
+        <Link className="btn btn-primary" to={`/purchase-orders?new=1`}>
           New PO
         </Link>
       </div>
@@ -65,7 +65,7 @@ export function VendorDetail() {
             <h2>Purchase orders</h2>
           </div>
           <div className="table-wrap">
-            <table className="data">
+            <table className="data data-clickable">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -81,7 +81,15 @@ export function VendorDetail() {
                   return (
                     <tr key={po.id}>
                       <td>{shortDate(po.date)}</td>
-                      <td>#{po.number}</td>
+                      <td>
+                        <Link
+                          className="linkish"
+                          to={`/purchase-orders?open=${po.id}`}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          #{po.number}
+                        </Link>
+                      </td>
                       <td>{loc?.code}</td>
                       <td>
                         <StatusBadge status={po.status} />

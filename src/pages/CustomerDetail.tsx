@@ -126,7 +126,15 @@ export function CustomerDetail() {
                 return (
                   <tr key={inv.id}>
                     <td>{shortDate(inv.date)}</td>
-                    <td style={{ fontWeight: 700 }}>#{inv.number}</td>
+                    <td style={{ fontWeight: 700 }}>
+                      <Link
+                        className="linkish"
+                        to={`/invoices?open=${inv.id}`}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        #{inv.number}
+                      </Link>
+                    </td>
                     <td>{shortDate(inv.dueDate)}</td>
                     <td>
                       <StatusBadge status={inv.status} />
