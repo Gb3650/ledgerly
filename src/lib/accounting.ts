@@ -61,8 +61,8 @@ export function balanceSheet(state: BooksState) {
   const totalAssets = sum(assets);
   const totalLiabilities = sum(liabilities);
   const equityAccounts = sum(equity);
-  // Plug so Assets = Liabilities + Equity (covers YTD activity not yet closed to RE).
-  const netIncome = Math.round((totalAssets - totalLiabilities - equityAccounts) * 100) / 100;
+  const year = new Date().getFullYear();
+  const { net: netIncome } = profitAndLoss(state, `${year}-01-01`, `${year}-12-31`);
 
   return {
     assets,

@@ -26,7 +26,8 @@ export function createSeed(): BooksState {
       { id: 'acc_visa', name: 'Visa Credit Card', type: 'credit_card', detailType: 'Credit Card', number: '2100', balance: -1864.22, isActive: true },
       { id: 'acc_sales_tax', name: 'Sales Tax Payable', type: 'other_current_liability', detailType: 'Sales Tax', number: '2200', balance: 980.4, isActive: true },
       { id: 'acc_equity', name: "Owner's Equity", type: 'equity', detailType: 'Equity', number: '3000', balance: 50000.0, isActive: true },
-      { id: 'acc_ret_earn', name: 'Retained Earnings', type: 'equity', detailType: 'Retained Earnings', number: '3100', balance: 16445.2, isActive: true },
+      // Calibrated so Assets = Liabilities + Equity accounts + YTD net income from sample activity.
+      { id: 'acc_ret_earn', name: 'Retained Earnings', type: 'equity', detailType: 'Retained Earnings', number: '3100', balance: 21718.78, isActive: true },
       { id: 'acc_services', name: 'Design Services', type: 'income', detailType: 'Service/Fee Income', number: '4000', balance: 0, isActive: true },
       { id: 'acc_products', name: 'Product Sales', type: 'income', detailType: 'Sales of Product Income', number: '4010', balance: 0, isActive: true },
       { id: 'acc_cogs', name: 'Cost of Goods Sold', type: 'cogs', detailType: 'Supplies & Materials', number: '5000', balance: 0, isActive: true },
