@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { useBooks } from '../store/BooksContext';
 
 export function Settings() {
-  const { state, updateCompany, exportBooks, importBooks, resetSampleData } = useBooks();
+  const { state, syncStatus, updateCompany, exportBooks, importBooks, resetSampleData } =
+    useBooks();
   const [company, setCompany] = useState(state.company);
   const [saved, setSaved] = useState(false);
   const [importMsg, setImportMsg] = useState('');
@@ -38,7 +39,29 @@ export function Settings() {
       <div className="page-header">
         <div>
           <h1>Settings</h1>
-          <p>ABC LLC company profile and local backups for testing.</p>
+          <p>Company profile, cloud sync, and backups for running ABC LLC.</p>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head">
+          <h2>Data &amp; sync</h2>
+        </div>
+        <div className="panel-pad" style={{ lineHeight: 1.7 }}>
+          <div>
+            <strong>Status:</strong>{' '}
+            {syncStatus === 'cloud'
+              ? 'Synced to your private cloud database'
+              : syncStatus === 'syncing'
+                ? 'Saving to cloud…'
+                : syncStatus === 'error'
+                  ? 'Cloud sync unavailable — using this browser'
+                  : 'Saved in this browser (cloud when published with database)'}
+          </div>
+          <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+            Always download a backup before major changes. Reset reloads starter ABC LLC activity
+            (invoices, POs, inventory).
+          </div>
         </div>
       </div>
 

@@ -10,8 +10,9 @@ function marginPct(sale: number, cost: number) {
 }
 
 export function Products() {
-  const { state, addProduct } = useBooks();
+  const { state, addProduct, updateProduct } = useBooks();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [sku, setSku] = useState('');
@@ -19,29 +20,63 @@ export function Products() {
   const [cost, setCost] = useState(0);
   const [type, setType] = useState<Product['type']>('service');
   const [incomeAccountId, setIncomeAccountId] = useState('acc_services');
+  const [reorderPoint, setReorderPoint] = useState(5);
 
   const incomeAccounts = state.accounts.filter((a) => a.type === 'income');
 
-  function onSave() {
-    if (!name.trim()) return;
-    addProduct({
-      name,
-      description,
-      sku,
-      unitPrice,
-      cost,
-      type,
-      incomeAccountId,
-      qtyOnHand: 0,
-      reorderPoint: type === 'inventory' ? 5 : undefined,
-    });
-    setOpen(false);
+  function openNew() {
+    setEditing(null);
     setName('');
     setDescription('');
     setSku('');
     setUnitPrice(0);
     setCost(0);
     setType('service');
+    setIncomeAccountId('acc_services');
+    setReorderPoint(5);
+    setOpen(true);
+  }
+
+  function openEdit(p: Product) {
+    setEditing(p);
+    setName(p.name);
+    setDescription(p.description);
+    setSku(p.sku);
+    setUnitPrice(p.unitPrice);
+    setCost(p.cost ?? 0);
+    setType(p.type);
+    setIncomeAccountId(p.incomeAccountId);
+    setReorderPoint(p.reorderPoint ?? 5);
+    setOpen(true);
+  }
+
+  function onSave() {
+    if (!name.trim()) return;
+    if (editing) {
+      updateProduct(editing.id, {
+        name,
+        description,
+        sku,
+        unitPrice,
+        cost,
+        type,
+        incomeAccountId,
+        reorderPoint: type === 'inventory' ? reorderPoint : undefined,
+      });
+    } else {
+      addProduct({
+        name,
+        description,
+        sku,
+        unitPrice,
+        cost,
+        type,
+        incomeAccountId,
+        qtyOnHand: 0,
+        reorderPoint: type === 'inventory' ? reorderPoint : undefined,
+      });
+    }
+    setOpen(false);
   }
 
   return (
@@ -51,14 +86,14 @@ export function Products() {
           <h1>Products &amp; services</h1>
           <p>Each item has a cost (what you pay) and a sale price (what you charge).</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setOpen(true)}>
+        <button className="btn btn-primary" onClick={openNew}>
           Add product/service
         </button>
       </div>
 
       <div className="panel">
         <div className="table-wrap">
-          <table className="data">
+          <table className="data data-clickable">
             <thead>
               <tr>
                 <th>Name</th>
@@ -68,13 +103,14 @@ export function Products() {
                 <th className="num">Cost</th>
                 <th className="num">Sale price</th>
                 <th className="num">Margin</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {state.products.map((p) => {
                 const m = marginPct(p.unitPrice, p.cost ?? 0);
                 return (
-                  <tr key={p.id}>
+                  <tr key={p.id} onClick={() => openEdit(p)}>
                     <td>
                       <div style={{ fontWeight: 700 }}>{p.name}</div>
                       <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
@@ -87,6 +123,11 @@ export function Products() {
                     <td className="num">{money(p.cost ?? 0)}</td>
                     <td className="num">{money(p.unitPrice)}</td>
                     <td className="num">{m == null ? '—' : `${m}%`}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>
+                        Edit
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -97,7 +138,7 @@ export function Products() {
 
       {open ? (
         <Modal
-          title="New product/service"
+          title={editing ? 'Edit product/service' : 'New product/service'}
           onClose={() => setOpen(false)}
           footer={
             <>
@@ -160,6 +201,17 @@ export function Products() {
                 onChange={(e) => setUnitPrice(Number(e.target.value))}
               />
             </div>
+            {type === 'inventory' ? (
+              <div className="field">
+                <label>Reorder point</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={reorderPoint}
+                  onChange={(e) => setReorderPoint(Number(e.target.value))}
+                />
+              </div>
+            ) : null}
           </div>
           {unitPrice > 0 ? (
             <div style={{ marginTop: 10, color: 'var(--muted)', fontSize: '0.9rem' }}>

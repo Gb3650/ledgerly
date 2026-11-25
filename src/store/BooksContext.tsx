@@ -4,12 +4,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { createSeed, STORAGE_KEY } from '../data/seed';
 import { invoiceTotals, markOverdue, refreshBalances } from '../lib/accounting';
-import { adjustStock, withProductTotals } from '../lib/inventory';
+import { fetchCloudBooks, saveCloudBooks } from '../lib/cloudBooks';
+import {
+  adjustStock,
+  buildMovements,
+  canFulfill,
+  withProductTotals,
+} from '../lib/inventory';
 import { addDaysISO, todayISO, uid } from '../lib/format';
 import type {
   BooksState,
@@ -21,11 +28,14 @@ import type {
   PoLine,
   Product,
   PurchaseOrder,
+  Quote,
+  SalesReceipt,
   Vendor,
 } from '../types';
 
 interface BooksContextValue {
   state: BooksState;
+  syncStatus: 'local' | 'cloud' | 'syncing' | 'error';
   resetSampleData: () => void;
   updateCompany: (patch: Partial<BooksState['company']>) => void;
   exportBooks: () => string;
@@ -37,6 +47,12 @@ interface BooksContextValue {
     toLocationId: string;
     productId: string;
     qty: number;
+    memo?: string;
+  }) => boolean;
+  adjustInventory: (input: {
+    locationId: string;
+    productId: string;
+    qtyDelta: number;
     memo?: string;
   }) => boolean;
   addCustomer: (c: Omit<Customer, 'id' | 'balance' | 'createdAt'>) => string;
@@ -54,7 +70,9 @@ interface BooksContextValue {
     status: Invoice['status'];
     message: string;
     lines: Omit<InvoiceLine, 'id' | 'amount'>[];
-  }) => string;
+    allowOversell?: boolean;
+  }) => { id: string; ok: boolean; shortages?: Array<{ productId: string; need: number; have: number }> };
+  voidInvoice: (invoiceId: string) => void;
   quickInvoice: (input: {
     customerId: string;
     productId: string;
@@ -64,6 +82,28 @@ interface BooksContextValue {
   }) => string;
   receivePayment: (invoiceId: string, amount?: number, method?: string, memo?: string) => void;
   markInvoiceEmailed: (invoiceId: string) => void;
+  saveQuote: (input: {
+    id?: string;
+    customerId: string;
+    locationId?: string;
+    date: string;
+    expiryDate: string;
+    status: Quote['status'];
+    message: string;
+    lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+  }) => string;
+  convertQuoteToInvoice: (quoteId: string) => string;
+  saveSalesReceipt: (input: {
+    id?: string;
+    customerId?: string;
+    customerName: string;
+    locationId: string;
+    date: string;
+    paymentMethod: string;
+    memo: string;
+    lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+    allowOversell?: boolean;
+  }) => { id: string; ok: boolean; shortages?: Array<{ productId: string; need: number; have: number }> };
   addExpense: (input: Omit<Expense, 'id' | 'createdAt'>) => void;
   payExpense: (id: string) => void;
   savePurchaseOrder: (input: {
@@ -95,6 +135,7 @@ function normalize(raw: BooksState): BooksState {
       ...p,
       cost: typeof p.cost === 'number' ? p.cost : 0,
       unitPrice: typeof p.unitPrice === 'number' ? p.unitPrice : 0,
+      isActive: p.isActive !== false,
     })),
     stock,
   );
@@ -103,10 +144,15 @@ function normalize(raw: BooksState): BooksState {
     locations,
     stock,
     stockTransfers: raw.stockTransfers ?? [],
+    stockMovements: raw.stockMovements ?? [],
     payments: raw.payments ?? [],
     purchaseOrders: raw.purchaseOrders ?? [],
+    quotes: raw.quotes ?? [],
+    salesReceipts: raw.salesReceipts ?? [],
     products,
     nextPoNumber: raw.nextPoNumber ?? 501,
+    nextQuoteNumber: raw.nextQuoteNumber ?? 2001,
+    nextReceiptNumber: raw.nextReceiptNumber ?? 9001,
     invoices: markOverdue(raw.invoices ?? []),
   });
 }
@@ -123,9 +169,39 @@ function loadState(): BooksState {
 
 export function BooksProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BooksState>(() => loadState());
+  const [syncStatus, setSyncStatus] = useState<'local' | 'cloud' | 'syncing' | 'error'>('local');
+  const hydrated = useRef(false);
+  const skipCloud = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cloud = await fetchCloudBooks();
+      if (cancelled) return;
+      if (cloud?.company) {
+        skipCloud.current = true;
+        setState(normalize(cloud));
+        setSyncStatus('cloud');
+        skipCloud.current = false;
+      }
+      hydrated.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!hydrated.current || skipCloud.current) return;
+    const t = window.setTimeout(() => {
+      setSyncStatus((s) => (s === 'cloud' || s === 'syncing' ? 'syncing' : s));
+      void saveCloudBooks(state).then((ok) => {
+        if (ok) setSyncStatus('cloud');
+        else setSyncStatus((s) => (s === 'syncing' ? 'local' : s));
+      });
+    }, 800);
+    return () => window.clearTimeout(t);
   }, [state]);
 
   const commit = useCallback((updater: (prev: BooksState) => BooksState) => {
@@ -190,23 +266,21 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         );
         if (!from || from.qty < input.qty) return prev;
         ok = true;
-        let stock = adjustStock(
-          prev.stock,
-          input.fromLocationId,
-          [{ productId: input.productId, qty: input.qty }],
-          -1,
-          ids,
-        );
-        stock = adjustStock(
-          stock,
-          input.toLocationId,
-          [{ productId: input.productId, qty: input.qty }],
-          1,
-          ids,
-        );
+        const lines = [{ productId: input.productId, qty: input.qty }];
+        let stock = adjustStock(prev.stock, input.fromLocationId, lines, -1, ids);
+        stock = adjustStock(stock, input.toLocationId, lines, 1, ids);
+        const movements = [
+          ...buildMovements(input.fromLocationId, lines, -1, ids, 'transfer_out', {
+            memo: input.memo,
+          }),
+          ...buildMovements(input.toLocationId, lines, 1, ids, 'transfer_in', {
+            memo: input.memo,
+          }),
+        ];
         return {
           ...prev,
           stock,
+          stockMovements: [...movements, ...(prev.stockMovements ?? [])],
           stockTransfers: [
             {
               id: uid('xfer'),
@@ -220,6 +294,45 @@ export function BooksProvider({ children }: { children: ReactNode }) {
             },
             ...prev.stockTransfers,
           ],
+        };
+      });
+      return ok;
+    },
+    [commit],
+  );
+
+  const adjustInventory = useCallback(
+    (input: {
+      locationId: string;
+      productId: string;
+      qtyDelta: number;
+      memo?: string;
+    }) => {
+      if (!input.qtyDelta) return false;
+      let ok = false;
+      commit((prev) => {
+        const ids = inventoryIds(prev.products);
+        if (!ids.has(input.productId)) return prev;
+        const have = prev.stock.find(
+          (s) => s.locationId === input.locationId && s.productId === input.productId,
+        )?.qty ?? 0;
+        if (input.qtyDelta < 0 && have < Math.abs(input.qtyDelta)) return prev;
+        ok = true;
+        const lines = [{ productId: input.productId, qty: Math.abs(input.qtyDelta) }];
+        const direction: 1 | -1 = input.qtyDelta > 0 ? 1 : -1;
+        const stock = adjustStock(prev.stock, input.locationId, lines, direction, ids);
+        const movements = buildMovements(
+          input.locationId,
+          lines,
+          direction,
+          ids,
+          'adjustment',
+          { memo: input.memo ?? 'Inventory adjustment' },
+        );
+        return {
+          ...prev,
+          stock,
+          stockMovements: [...movements, ...(prev.stockMovements ?? [])],
         };
       });
       return ok;
@@ -275,7 +388,10 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     (p: Omit<Product, 'id'>) => {
       commit((prev) => ({
         ...prev,
-        products: [...prev.products, { ...p, id: uid('prd'), qtyOnHand: p.qtyOnHand ?? 0 }],
+        products: [
+          ...prev.products,
+          { ...p, id: uid('prd'), qtyOnHand: p.qtyOnHand ?? 0, isActive: true },
+        ],
       }));
     },
     [commit],
@@ -301,8 +417,15 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       status: Invoice['status'];
       message: string;
       lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+      allowOversell?: boolean;
     }) => {
       let newId = input.id ?? uid('inv');
+      let result: {
+        id: string;
+        ok: boolean;
+        shortages?: Array<{ productId: string; need: number; have: number }>;
+      } = { id: newId, ok: true };
+
       commit((prev) => {
         const lines: InvoiceLine[] = input.lines.map((l) => ({
           ...l,
@@ -330,12 +453,36 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         const willOpen = status !== 'draft' && status !== 'void';
         const ids = inventoryIds(prev.products);
         let stock = prev.stock;
+        let stockMovements = prev.stockMovements ?? [];
 
+        // Restore then re-apply so edits don't double-deplete.
         if (wasOpen && existing?.locationId) {
           stock = adjustStock(stock, existing.locationId, existing.lines, 1, ids);
+          stockMovements = [
+            ...buildMovements(existing.locationId, existing.lines, 1, ids, 'invoice_void', {
+              refType: 'invoice',
+              refId: existing.id,
+              memo: `Edit restore INV-${existing.number}`,
+            }),
+            ...stockMovements,
+          ];
         }
         if (willOpen && locationId) {
+          const check = canFulfill(stock, locationId, lines, ids);
+          if (!check.ok && !input.allowOversell) {
+            result = { id: newId, ok: false, shortages: check.shortages };
+            return prev;
+          }
           stock = adjustStock(stock, locationId, lines, -1, ids);
+          stockMovements = [
+            ...buildMovements(locationId, lines, -1, ids, 'invoice_fulfill', {
+              refType: 'invoice',
+              refId: newId,
+              memo: `Fulfill INV-${number}`,
+              date: input.date,
+            }),
+            ...stockMovements,
+          ];
         }
 
         const invoice: Invoice = {
@@ -352,6 +499,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
           balance: status === 'paid' ? 0 : balance,
           createdAt: existing?.createdAt ?? todayISO(),
           emailedAt: existing?.emailedAt,
+          quoteId: existing?.quoteId,
         };
         const invoices = existing
           ? prev.invoices.map((i) => (i.id === existing.id ? invoice : i))
@@ -359,11 +507,44 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         return {
           ...prev,
           stock,
+          stockMovements,
           invoices,
           nextInvoiceNumber: existing ? prev.nextInvoiceNumber : prev.nextInvoiceNumber + 1,
         };
       });
-      return newId;
+      return result;
+    },
+    [commit],
+  );
+
+  const voidInvoice = useCallback(
+    (invoiceId: string) => {
+      commit((prev) => {
+        const inv = prev.invoices.find((i) => i.id === invoiceId);
+        if (!inv || inv.status === 'void') return prev;
+        const ids = inventoryIds(prev.products);
+        let stock = prev.stock;
+        let stockMovements = prev.stockMovements ?? [];
+        if (inv.status !== 'draft' && inv.locationId) {
+          stock = adjustStock(stock, inv.locationId, inv.lines, 1, ids);
+          stockMovements = [
+            ...buildMovements(inv.locationId, inv.lines, 1, ids, 'invoice_void', {
+              refType: 'invoice',
+              refId: inv.id,
+              memo: `Void INV-${inv.number}`,
+            }),
+            ...stockMovements,
+          ];
+        }
+        return {
+          ...prev,
+          stock,
+          stockMovements,
+          invoices: prev.invoices.map((i) =>
+            i.id === invoiceId ? { ...i, status: 'void' as const, balance: 0 } : i,
+          ),
+        };
+      });
     },
     [commit],
   );
@@ -378,7 +559,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }) => {
       const product = state.products.find((p) => p.id === input.productId);
       if (!product) return '';
-      return saveInvoice({
+      const res = saveInvoice({
         customerId: input.customerId,
         locationId: input.locationId,
         date: todayISO(),
@@ -393,7 +574,9 @@ export function BooksProvider({ children }: { children: ReactNode }) {
             rate: product.unitPrice,
           },
         ],
+        allowOversell: true,
       });
+      return res.id;
     },
     [saveInvoice, state.products],
   );
@@ -402,7 +585,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     (invoiceId: string, amount?: number, method = 'Manual', memo = '') => {
       commit((prev) => {
         const inv = prev.invoices.find((i) => i.id === invoiceId);
-        if (!inv || inv.balance <= 0) return prev;
+        if (!inv || inv.balance <= 0 || inv.status === 'void') return prev;
         const pay = Math.min(inv.balance, amount ?? inv.balance);
         const balance = Math.max(0, Math.round((inv.balance - pay) * 100) / 100);
         const status = balance === 0 ? 'paid' : 'partial';
@@ -465,6 +648,194 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const saveQuote = useCallback(
+    (input: {
+      id?: string;
+      customerId: string;
+      locationId?: string;
+      date: string;
+      expiryDate: string;
+      status: Quote['status'];
+      message: string;
+      lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+    }) => {
+      let newId = input.id ?? uid('quo');
+      commit((prev) => {
+        const existing = input.id ? prev.quotes.find((q) => q.id === input.id) : undefined;
+        if (existing?.status === 'converted') return prev;
+        const lines: InvoiceLine[] = input.lines.map((l) => ({
+          ...l,
+          id: uid('ql'),
+          amount: Math.round(l.qty * l.rate * 100) / 100,
+        }));
+        const totals = invoiceTotals(lines);
+        const quote: Quote = {
+          id: newId,
+          number: existing?.number ?? String(prev.nextQuoteNumber),
+          customerId: input.customerId,
+          locationId: input.locationId,
+          date: input.date,
+          expiryDate: input.expiryDate,
+          status: input.status === 'converted' ? 'sent' : input.status,
+          lines,
+          message: input.message,
+          ...totals,
+          createdAt: existing?.createdAt ?? todayISO(),
+          invoiceId: existing?.invoiceId,
+        };
+        return {
+          ...prev,
+          quotes: existing
+            ? prev.quotes.map((q) => (q.id === existing.id ? quote : q))
+            : [...(prev.quotes ?? []), quote],
+          nextQuoteNumber: existing ? prev.nextQuoteNumber : prev.nextQuoteNumber + 1,
+        };
+      });
+      return newId;
+    },
+    [commit],
+  );
+
+  const convertQuoteToInvoice = useCallback(
+    (quoteId: string) => {
+      const quote = state.quotes.find((q) => q.id === quoteId);
+      if (!quote || quote.status === 'converted') return '';
+      const res = saveInvoice({
+        customerId: quote.customerId,
+        locationId: quote.locationId,
+        date: todayISO(),
+        dueDate: addDaysISO(todayISO(), 30),
+        status: 'sent',
+        message: quote.message || 'Converted from estimate.',
+        lines: quote.lines.map((l) => ({
+          productId: l.productId,
+          description: l.description,
+          qty: l.qty,
+          rate: l.rate,
+        })),
+        allowOversell: true,
+      });
+      if (res.ok) {
+        commit((prev) => ({
+          ...prev,
+          quotes: prev.quotes.map((q) =>
+            q.id === quoteId
+              ? { ...q, status: 'converted' as const, invoiceId: res.id }
+              : q,
+          ),
+          invoices: prev.invoices.map((i) =>
+            i.id === res.id ? { ...i, quoteId } : i,
+          ),
+        }));
+      }
+      return res.id;
+    },
+    [commit, saveInvoice, state.quotes],
+  );
+
+  const saveSalesReceipt = useCallback(
+    (input: {
+      id?: string;
+      customerId?: string;
+      customerName: string;
+      locationId: string;
+      date: string;
+      paymentMethod: string;
+      memo: string;
+      lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+      allowOversell?: boolean;
+    }) => {
+      let newId = input.id ?? uid('rcpt');
+      let result: {
+        id: string;
+        ok: boolean;
+        shortages?: Array<{ productId: string; need: number; have: number }>;
+      } = { id: newId, ok: true };
+
+      commit((prev) => {
+        const existing = input.id
+          ? prev.salesReceipts.find((r) => r.id === input.id)
+          : undefined;
+        const lines: InvoiceLine[] = input.lines.map((l) => ({
+          ...l,
+          id: uid('rl'),
+          amount: Math.round(l.qty * l.rate * 100) / 100,
+        }));
+        const totals = invoiceTotals(lines);
+        const ids = inventoryIds(prev.products);
+        let stock = prev.stock;
+        let stockMovements = prev.stockMovements ?? [];
+
+        if (existing) {
+          stock = adjustStock(stock, existing.locationId, existing.lines, 1, ids);
+        }
+        const check = canFulfill(stock, input.locationId, lines, ids);
+        if (!check.ok && !input.allowOversell) {
+          result = { id: newId, ok: false, shortages: check.shortages };
+          return prev;
+        }
+        stock = adjustStock(stock, input.locationId, lines, -1, ids);
+        const number = existing?.number ?? String(prev.nextReceiptNumber);
+        stockMovements = [
+          ...buildMovements(input.locationId, lines, -1, ids, 'sales_receipt', {
+            refType: 'sales_receipt',
+            refId: newId,
+            memo: `Sales receipt #${number}`,
+            date: input.date,
+          }),
+          ...stockMovements,
+        ];
+
+        const receipt: SalesReceipt = {
+          id: newId,
+          number,
+          customerId: input.customerId,
+          customerName: input.customerName,
+          locationId: input.locationId,
+          date: input.date,
+          paymentMethod: input.paymentMethod,
+          lines,
+          memo: input.memo,
+          ...totals,
+          createdAt: existing?.createdAt ?? todayISO(),
+        };
+
+        const deltaCash = totals.total - (existing?.total ?? 0);
+
+        return {
+          ...prev,
+          stock,
+          stockMovements,
+          salesReceipts: existing
+            ? prev.salesReceipts.map((r) => (r.id === existing.id ? receipt : r))
+            : [...(prev.salesReceipts ?? []), receipt],
+          nextReceiptNumber: existing ? prev.nextReceiptNumber : prev.nextReceiptNumber + 1,
+          accounts: prev.accounts.map((a) =>
+            a.id === 'acc_checking' ? { ...a, balance: a.balance + deltaCash } : a,
+          ),
+          transactions: existing
+            ? prev.transactions
+            : [
+                {
+                  id: uid('txn'),
+                  accountId: 'acc_checking',
+                  date: input.date,
+                  description: `Sales receipt #${number} — ${input.customerName}`,
+                  amount: totals.total,
+                  type: 'sales_receipt' as const,
+                  matched: true,
+                  categoryAccountId: 'acc_products',
+                  payee: input.customerName,
+                },
+                ...prev.transactions,
+              ],
+        };
+      });
+      return result;
+    },
+    [commit],
+  );
+
   const addExpense = useCallback(
     (input: Omit<Expense, 'id' | 'createdAt'>) => {
       commit((prev) => {
@@ -473,7 +844,9 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         let transactions = prev.transactions;
         if (expense.status === 'paid') {
           accounts = accounts.map((a) =>
-            a.id === expense.paymentAccountId ? { ...a, balance: a.balance - expense.amount } : a,
+            a.id === expense.paymentAccountId
+              ? { ...a, balance: a.balance - expense.amount }
+              : a,
           );
           transactions = [
             {
@@ -608,16 +981,17 @@ export function BooksProvider({ children }: { children: ReactNode }) {
           productId: l.productId,
           qty: l.qtyReceived - po.lines[i].qtyReceived,
         }));
-        const stock = adjustStock(
-          prev.stock,
-          po.locationId,
-          deltaLines,
-          1,
-          inventoryIds(prev.products),
-        );
+        const ids = inventoryIds(prev.products);
+        const stock = adjustStock(prev.stock, po.locationId, deltaLines, 1, ids);
+        const movements = buildMovements(po.locationId, deltaLines, 1, ids, 'po_receive', {
+          refType: 'purchase_order',
+          refId: po.id,
+          memo: `Receive PO #${po.number}`,
+        });
         return {
           ...prev,
           stock,
+          stockMovements: [...movements, ...(prev.stockMovements ?? [])],
           purchaseOrders: prev.purchaseOrders.map((p) =>
             p.id === poId
               ? {
@@ -658,6 +1032,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       state,
+      syncStatus,
       resetSampleData,
       updateCompany,
       exportBooks,
@@ -665,6 +1040,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       addLocation,
       updateLocation,
       transferStock,
+      adjustInventory,
       addCustomer,
       updateCustomer,
       addVendor,
@@ -672,9 +1048,13 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       addProduct,
       updateProduct,
       saveInvoice,
+      voidInvoice,
       quickInvoice,
       receivePayment,
       markInvoiceEmailed,
+      saveQuote,
+      convertQuoteToInvoice,
+      saveSalesReceipt,
       addExpense,
       payExpense,
       savePurchaseOrder,
@@ -684,6 +1064,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      syncStatus,
       resetSampleData,
       updateCompany,
       exportBooks,
@@ -691,6 +1072,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       addLocation,
       updateLocation,
       transferStock,
+      adjustInventory,
       addCustomer,
       updateCustomer,
       addVendor,
@@ -698,9 +1080,13 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       addProduct,
       updateProduct,
       saveInvoice,
+      voidInvoice,
       quickInvoice,
       receivePayment,
       markInvoiceEmailed,
+      saveQuote,
+      convertQuoteToInvoice,
+      saveSalesReceipt,
       addExpense,
       payExpense,
       savePurchaseOrder,

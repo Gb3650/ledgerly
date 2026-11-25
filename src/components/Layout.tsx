@@ -35,6 +35,8 @@ const nav = [
     items: [
       { to: '/sales', icon: FileText, label: 'All sales' },
       { to: '/invoices', icon: Receipt, label: 'Invoices' },
+      { to: '/quotes', icon: FileText, label: 'Estimates' },
+      { to: '/sales-receipts', icon: Wallet, label: 'Sales receipts' },
       { to: '/customers', icon: Users, label: 'Customers' },
       { to: '/products', icon: Package, label: 'Products & services' },
     ],
@@ -63,9 +65,10 @@ const newMenu = [
     label: 'CUSTOMERS',
     items: [
       { to: '/invoices?new=1', label: 'Invoice' },
+      { to: '/quotes?new=1', label: 'Estimate' },
+      { to: '/sales-receipts?new=1', label: 'Sales receipt' },
       { to: '/customers?new=1', label: 'Customer' },
       { to: '/products', label: 'Product/service' },
-      { to: '/sales', label: 'All sales' },
     ],
   },
   {
