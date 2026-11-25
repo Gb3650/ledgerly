@@ -74,7 +74,7 @@ interface BooksContextValue {
     expectedDate: string;
     status: PurchaseOrder['status'];
     memo: string;
-    lines: Omit<PoLine, 'id' | 'amount' | 'qtyReceived'>[];
+    lines: Array<Omit<PoLine, 'id' | 'amount'> & { qtyReceived?: number }>;
   }) => string;
   receivePo: (poId: string, receiveAll?: boolean) => void;
   matchTransaction: (id: string, categoryAccountId: string) => void;
@@ -543,19 +543,29 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       expectedDate: string;
       status: PurchaseOrder['status'];
       memo: string;
-      lines: Omit<PoLine, 'id' | 'amount' | 'qtyReceived'>[];
+      lines: Array<Omit<PoLine, 'id' | 'amount'> & { qtyReceived?: number }>;
     }) => {
       let newId = input.id ?? uid('po');
       commit((prev) => {
-        const lines: PoLine[] = input.lines.map((l) => ({
-          ...l,
-          id: uid('pl'),
-          qtyReceived: 0,
+        const existing = input.id ? prev.purchaseOrders.find((p) => p.id === input.id) : undefined;
+        const lines: PoLine[] = input.lines.map((l, i) => ({
+          productId: l.productId,
+          description: l.description,
+          qty: l.qty,
+          rate: l.rate,
+          id: existing?.lines[i]?.id ?? uid('pl'),
+          qtyReceived: Math.min(l.qty, l.qtyReceived ?? existing?.lines[i]?.qtyReceived ?? 0),
           amount: Math.round(l.qty * l.rate * 100) / 100,
         }));
         const totals = invoiceTotals(lines);
-        const existing = input.id ? prev.purchaseOrders.find((p) => p.id === input.id) : undefined;
         const number = existing?.number ?? String(prev.nextPoNumber);
+        let status = input.status;
+        if (status !== 'draft' && status !== 'cancelled') {
+          const fully = lines.length > 0 && lines.every((l) => l.qtyReceived >= l.qty);
+          const any = lines.some((l) => l.qtyReceived > 0);
+          if (fully) status = 'received';
+          else if (any) status = 'partial';
+        }
         const po: PurchaseOrder = {
           id: newId,
           number,
@@ -563,14 +573,9 @@ export function BooksProvider({ children }: { children: ReactNode }) {
           locationId: input.locationId,
           date: input.date,
           expectedDate: input.expectedDate,
-          status: input.status,
+          status,
           memo: input.memo,
-          lines: existing
-            ? lines.map((l, i) => ({
-                ...l,
-                qtyReceived: existing.lines[i]?.qtyReceived ?? 0,
-              }))
-            : lines,
+          lines,
           ...totals,
           createdAt: existing?.createdAt ?? todayISO(),
         };

@@ -18,8 +18,12 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
   }, [onClose]);
 
   return (
@@ -38,11 +42,7 @@ export function Modal({
           </button>
         </div>
         <div className="modal-body">{children}</div>
-        {footer ? (
-          <div style={{ padding: '0 22px 22px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            {footer}
-          </div>
-        ) : null}
+        {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>
   );
