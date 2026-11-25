@@ -18,10 +18,6 @@ export function profitAndLoss(state: BooksState, from: string, to: string) {
     .filter((i) => i.status === 'paid' && inRange(i.date))
     .reduce((s, i) => s + i.total, 0);
 
-  const otherIncome = state.transactions
-    .filter((t) => t.type === 'deposit' && inRange(t.date) && t.matched)
-    .reduce((s, t) => s + Math.max(0, t.amount), 0);
-
   const expenses = state.expenses
     .filter((e) => e.status === 'paid' && inRange(e.date))
     .reduce((s, e) => s + e.amount, 0);
@@ -33,11 +29,10 @@ export function profitAndLoss(state: BooksState, from: string, to: string) {
     byCategory.set(name, (byCategory.get(name) ?? 0) + e.amount);
   }
 
-  const totalIncome = income + otherIncome * 0; // keep sales-based for clarity
-  const net = totalIncome - expenses;
+  const net = income - expenses;
 
   return {
-    income: totalIncome,
+    income,
     expenses,
     net,
     byCategory: [...byCategory.entries()]
@@ -53,22 +48,30 @@ export function balanceSheet(state: BooksState) {
       .map((a) => ({ ...a }));
 
   const assets = group(['bank', 'accounts_receivable', 'other_current_asset', 'fixed_asset']);
+  // Credit cards are stored as negative bank-style balances; show them as amounts owed.
   const liabilities = group([
     'accounts_payable',
     'credit_card',
     'other_current_liability',
-  ]);
+  ]).map((a) => (a.type === 'credit_card' ? { ...a, balance: Math.abs(a.balance) } : a));
   const equity = group(['equity']);
 
   const sum = (rows: Account[]) => rows.reduce((s, a) => s + a.balance, 0);
+
+  const totalAssets = sum(assets);
+  const totalLiabilities = sum(liabilities);
+  const equityAccounts = sum(equity);
+  // Plug so Assets = Liabilities + Equity (covers YTD activity not yet closed to RE).
+  const netIncome = Math.round((totalAssets - totalLiabilities - equityAccounts) * 100) / 100;
 
   return {
     assets,
     liabilities,
     equity,
-    totalAssets: sum(assets),
-    totalLiabilities: sum(liabilities),
-    totalEquity: sum(equity),
+    netIncome,
+    totalAssets,
+    totalLiabilities,
+    totalEquity: equityAccounts + netIncome,
   };
 }
 
@@ -79,10 +82,12 @@ export function arAging(invoices: Invoice[], customers: BooksState['customers'])
   const rows = open.map((inv) => {
     const due = new Date(inv.dueDate + 'T12:00:00');
     const days = Math.floor((today.getTime() - due.getTime()) / 86400000);
+    // current | 1–30 | 31–60 | 61+
     let bucket: keyof typeof buckets = 'current';
-    if (days > 90) bucket = 'd90';
-    else if (days > 60) bucket = 'd60';
-    else if (days > 30) bucket = 'd30';
+    if (days <= 0) bucket = 'current';
+    else if (days <= 30) bucket = 'd30';
+    else if (days <= 60) bucket = 'd60';
+    else bucket = 'd90';
     buckets[bucket] += inv.balance;
     const customer = customers.find((c) => c.id === inv.customerId);
     return { invoice: inv, customerName: customer?.name ?? 'Unknown', days, bucket };

@@ -22,11 +22,11 @@ export function Dashboard() {
 
   const catTotal = pl.byCategory.reduce((s, c) => s + c.amount, 0) || 1;
   const topCats = pl.byCategory.slice(0, 4);
-  let cursor = 0;
-  const stops = topCats.map((c) => {
-    cursor += (c.amount / catTotal) * 100;
-    return cursor;
-  });
+  const stops = topCats.reduce<number[]>((acc, c) => {
+    const prev = acc.length ? acc[acc.length - 1] : 0;
+    acc.push(prev + (c.amount / catTotal) * 100);
+    return acc;
+  }, []);
   const colors = ['var(--sea)', 'var(--amber)', 'var(--sky)', 'var(--mist)'];
 
   return (
@@ -34,7 +34,7 @@ export function Dashboard() {
       <div className="page-header">
         <div>
           <h1>Dashboard</h1>
-          <p>Profit, cash, and open invoices for {state.company.name}.</p>
+          <p>Profit, cash, and open invoices for {state.company.name}</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <Link className="btn btn-ghost" to="/invoices?new=1">
@@ -83,10 +83,12 @@ export function Dashboard() {
             <div className="chart-bars">
               {months.map((m, i) => (
                 <div className="chart-bar" key={m}>
-                  <div
-                    className="fill"
-                    style={{ height: `${Math.max(8, (incomeSeries[i] / maxIncome) * 100)}%` }}
-                  />
+                  <div className="chart-bar-track">
+                    <div
+                      className="fill"
+                      style={{ height: `${Math.max(8, (incomeSeries[i] / maxIncome) * 100)}%` }}
+                    />
+                  </div>
                   <div className="lbl">{m}</div>
                 </div>
               ))}

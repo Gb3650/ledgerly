@@ -116,12 +116,12 @@ export function Reports() {
                   <span>
                     {a.number} · {a.name}
                   </span>
-                  <span>{money(Math.abs(a.balance))}</span>
+                  <span>{money(a.balance)}</span>
                 </div>
               ))}
               <div className="account-row" style={{ fontWeight: 700 }}>
                 <span>Total liabilities</span>
-                <span>{money(Math.abs(bs.totalLiabilities))}</span>
+                <span>{money(bs.totalLiabilities)}</span>
               </div>
               <div style={{ fontWeight: 700, margin: '16px 0 4px' }}>Equity</div>
               {bs.equity.map((a) => (
@@ -132,9 +132,13 @@ export function Reports() {
                   <span>{money(a.balance)}</span>
                 </div>
               ))}
+              <div className="account-row">
+                <span style={{ color: 'var(--ink-soft)' }}>Net Income</span>
+                <span>{money(bs.netIncome)}</span>
+              </div>
               <div className="account-row" style={{ fontWeight: 700, borderTop: '1px solid var(--line)', marginTop: 8, paddingTop: 12 }}>
                 <span>Total liabilities &amp; equity</span>
-                <span>{money(Math.abs(bs.totalLiabilities) + bs.totalEquity)}</span>
+                <span>{money(bs.totalLiabilities + bs.totalEquity)}</span>
               </div>
             </div>
           </div>
@@ -149,7 +153,7 @@ export function Reports() {
                 ['Current', ar.buckets.current],
                 ['1–30', ar.buckets.d30],
                 ['31–60', ar.buckets.d60],
-                ['90+', ar.buckets.d90],
+                ['61+', ar.buckets.d90],
               ] as const
             ).map(([label, val]) => (
               <div className="panel stat" key={label}>
