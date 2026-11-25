@@ -87,7 +87,10 @@ export interface Product {
   name: string;
   description: string;
   sku: string;
+  /** Customer-facing sale price. */
   unitPrice: number;
+  /** Unit cost / landed cost (what you pay). */
+  cost: number;
   incomeAccountId: string;
   expenseAccountId?: string;
   type: 'service' | 'inventory' | 'non_inventory';

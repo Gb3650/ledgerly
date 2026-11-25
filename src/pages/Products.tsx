@@ -4,6 +4,11 @@ import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 import type { Product } from '../types';
 
+function marginPct(sale: number, cost: number) {
+  if (sale <= 0) return null;
+  return Math.round(((sale - cost) / sale) * 1000) / 10;
+}
+
 export function Products() {
   const { state, addProduct } = useBooks();
   const [open, setOpen] = useState(false);
@@ -11,6 +16,7 @@ export function Products() {
   const [description, setDescription] = useState('');
   const [sku, setSku] = useState('');
   const [unitPrice, setUnitPrice] = useState(0);
+  const [cost, setCost] = useState(0);
   const [type, setType] = useState<Product['type']>('service');
   const [incomeAccountId, setIncomeAccountId] = useState('acc_services');
 
@@ -23,6 +29,7 @@ export function Products() {
       description,
       sku,
       unitPrice,
+      cost,
       type,
       incomeAccountId,
       qtyOnHand: 0,
@@ -33,6 +40,7 @@ export function Products() {
     setDescription('');
     setSku('');
     setUnitPrice(0);
+    setCost(0);
     setType('service');
   }
 
@@ -41,7 +49,7 @@ export function Products() {
       <div className="page-header">
         <div>
           <h1>Products &amp; services</h1>
-          <p>Items you sell on invoices.</p>
+          <p>Each item has a cost (what you pay) and a sale price (what you charge).</p>
         </div>
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           Add product/service
@@ -56,25 +64,32 @@ export function Products() {
                 <th>Name</th>
                 <th>SKU</th>
                 <th>Type</th>
-                <th>Income account</th>
                 <th className="num">On hand</th>
-                <th className="num">Price</th>
+                <th className="num">Cost</th>
+                <th className="num">Sale price</th>
+                <th className="num">Margin</th>
               </tr>
             </thead>
             <tbody>
-              {state.products.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <div style={{ fontWeight: 700 }}>{p.name}</div>
-                    <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{p.description}</div>
-                  </td>
-                  <td>{p.sku}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{p.type.replace('_', ' ')}</td>
-                  <td>{state.accounts.find((a) => a.id === p.incomeAccountId)?.name}</td>
-                  <td className="num">{p.type === 'inventory' ? p.qtyOnHand : '—'}</td>
-                  <td className="num">{money(p.unitPrice)}</td>
-                </tr>
-              ))}
+              {state.products.map((p) => {
+                const m = marginPct(p.unitPrice, p.cost ?? 0);
+                return (
+                  <tr key={p.id}>
+                    <td>
+                      <div style={{ fontWeight: 700 }}>{p.name}</div>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                        {p.description}
+                      </div>
+                    </td>
+                    <td>{p.sku}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{p.type.replace('_', ' ')}</td>
+                    <td className="num">{p.type === 'inventory' ? p.qtyOnHand : '—'}</td>
+                    <td className="num">{money(p.cost ?? 0)}</td>
+                    <td className="num">{money(p.unitPrice)}</td>
+                    <td className="num">{m == null ? '—' : `${m}%`}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -113,16 +128,6 @@ export function Products() {
               </select>
             </div>
             <div className="field">
-              <label>Sales price</label>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(Number(e.target.value))}
-              />
-            </div>
-            <div className="field">
               <label>Income account</label>
               <select
                 value={incomeAccountId}
@@ -135,7 +140,32 @@ export function Products() {
                 ))}
               </select>
             </div>
+            <div className="field">
+              <label>Cost (what you pay)</label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={cost}
+                onChange={(e) => setCost(Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label>Sale price (what you charge)</label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(Number(e.target.value))}
+              />
+            </div>
           </div>
+          {unitPrice > 0 ? (
+            <div style={{ marginTop: 10, color: 'var(--muted)', fontSize: '0.9rem' }}>
+              Margin {marginPct(unitPrice, cost)}% · Gross {money(unitPrice - cost)} per unit
+            </div>
+          ) : null}
           <div className="field" style={{ marginTop: 14 }}>
             <label>Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} />

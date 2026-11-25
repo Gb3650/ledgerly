@@ -1,6 +1,6 @@
 import type { BooksState } from '../types';
 
-export const STORAGE_KEY = 'ledgerly.books.v2.abc';
+export const STORAGE_KEY = 'ledgerly.books.v3.abc';
 
 export function createSeed(): BooksState {
   return {
@@ -150,6 +150,7 @@ export function createSeed(): BooksState {
         description: 'Professional consulting',
         sku: 'SVC-HR',
         unitPrice: 150,
+        cost: 0,
         incomeAccountId: 'acc_services',
         type: 'service',
         qtyOnHand: 0,
@@ -160,6 +161,7 @@ export function createSeed(): BooksState {
         description: 'Boxed product starter kit',
         sku: 'KIT-01',
         unitPrice: 89,
+        cost: 32,
         incomeAccountId: 'acc_products',
         expenseAccountId: 'acc_cogs',
         type: 'inventory',
@@ -172,6 +174,7 @@ export function createSeed(): BooksState {
         description: 'Premium product bundle',
         sku: 'BND-PR',
         unitPrice: 249,
+        cost: 95,
         incomeAccountId: 'acc_products',
         expenseAccountId: 'acc_cogs',
         type: 'inventory',
@@ -184,6 +187,7 @@ export function createSeed(): BooksState {
         description: 'Recurring support retainer',
         sku: 'RET-MO',
         unitPrice: 500,
+        cost: 0,
         incomeAccountId: 'acc_services',
         type: 'service',
         qtyOnHand: 0,

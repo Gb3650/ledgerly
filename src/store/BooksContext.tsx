@@ -90,7 +90,14 @@ function inventoryIds(products: Product[]) {
 function normalize(raw: BooksState): BooksState {
   const locations = raw.locations ?? [];
   const stock = raw.stock ?? [];
-  const products = withProductTotals(raw.products ?? [], stock);
+  const products = withProductTotals(
+    (raw.products ?? []).map((p) => ({
+      ...p,
+      cost: typeof p.cost === 'number' ? p.cost : 0,
+      unitPrice: typeof p.unitPrice === 'number' ? p.unitPrice : 0,
+    })),
+    stock,
+  );
   return refreshBalances({
     ...raw,
     locations,

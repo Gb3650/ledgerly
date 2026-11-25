@@ -151,14 +151,14 @@ export function refreshBalances(state: BooksState): BooksState {
 
   const invAsset = accounts.find((a) => a.id === 'acc_inventory');
   if (invAsset) {
-    // Cost proxy: 40% of sell price × qty across all locations.
+    // Inventory asset = qty × unit cost across all locations.
     invAsset.balance = state.products
       .filter((p) => p.type === 'inventory')
       .reduce((s, p) => {
         const qty = stock
           .filter((row) => row.productId === p.id)
           .reduce((n, row) => n + row.qty, 0);
-        return s + qty * p.unitPrice * 0.4;
+        return s + qty * (p.cost ?? 0);
       }, 0);
     invAsset.balance = Math.round(invAsset.balance * 100) / 100;
   }

@@ -37,7 +37,7 @@ export function PurchaseOrders() {
               productId,
               description: product?.name || l.description,
               qty: l.qty || 1,
-              rate: product?.unitPrice ?? l.rate,
+              rate: product?.cost ?? product?.unitPrice ?? l.rate,
             }
           : l,
       ),
