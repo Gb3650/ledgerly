@@ -310,14 +310,18 @@ export function Invoices() {
                           style={{ width: '100%', border: 'none', padding: 8 }}
                         >
                           <option value="">Custom</option>
-                          {state.products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                              {p.type === 'inventory' && locationId
-                                ? ` (${stockQty(state.stock, p.id, locationId)} @ loc)`
-                                : ''}
-                            </option>
-                          ))}
+                          {state.products.map((p) => {
+                            const locCode =
+                              state.locations.find((l) => l.id === locationId)?.code ?? 'loc';
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                                {p.type === 'inventory' && locationId
+                                  ? ` (${stockQty(state.stock, p.id, locationId)} @ ${locCode})`
+                                  : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
                       <td>
