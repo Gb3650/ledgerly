@@ -596,7 +596,6 @@ table.data .num {
   display: grid;
   place-items: center;
   padding: 20px;
-  animation: fadeUp 0.2s ease;
 }
 
 .modal {
@@ -609,6 +608,16 @@ table.data .num {
   border-radius: 18px;
   box-shadow: var(--shadow);
   border: 1px solid var(--line);
+  animation: modalIn 0.18s ease both;
+}
+
+@keyframes modalIn {
+  from {
+    transform: translateY(12px);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .modal.wide {
