@@ -1,24 +1,32 @@
 import { useMemo, useState } from 'react';
-import { arAging, balanceSheet, profitAndLoss } from '../lib/accounting';
+import {
+  arAging,
+  balanceSheet,
+  profitAndLoss,
+  salesByProduct,
+  spendByVendor,
+} from '../lib/accounting';
 import { money } from '../lib/format';
 import { useBooks } from '../store/BooksContext';
 
 export function Reports() {
   const { state } = useBooks();
-  const [report, setReport] = useState<'pl' | 'bs' | 'ar'>('pl');
+  const [report, setReport] = useState<'pl' | 'bs' | 'ar' | 'product' | 'vendor'>('pl');
   const [from, setFrom] = useState('2026-01-01');
   const [to, setTo] = useState('2026-12-31');
 
   const pl = useMemo(() => profitAndLoss(state, from, to), [state, from, to]);
   const bs = useMemo(() => balanceSheet(state), [state]);
   const ar = useMemo(() => arAging(state.invoices, state.customers), [state]);
+  const byProduct = useMemo(() => salesByProduct(state, from, to), [state, from, to]);
+  const byVendor = useMemo(() => spendByVendor(state, from, to), [state, from, to]);
 
   return (
     <div>
       <div className="page-header">
         <div>
           <h1>Reports</h1>
-          <p>Profit &amp; loss, balance sheet, and A/R aging.</p>
+          <p>P&amp;L, balance sheet, A/R, sales by product, and spend by vendor.</p>
         </div>
       </div>
 
@@ -31,6 +39,18 @@ export function Reports() {
         </button>
         <button className={`tab ${report === 'ar' ? 'active' : ''}`} onClick={() => setReport('ar')}>
           A/R Aging
+        </button>
+        <button
+          className={`tab ${report === 'product' ? 'active' : ''}`}
+          onClick={() => setReport('product')}
+        >
+          By product
+        </button>
+        <button
+          className={`tab ${report === 'vendor' ? 'active' : ''}`}
+          onClick={() => setReport('vendor')}
+        >
+          By vendor
         </button>
       </div>
 
@@ -194,6 +214,88 @@ export function Reports() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {report === 'product' ? (
+        <div className="panel">
+          <div className="panel-head" style={{ paddingBottom: 12, flexWrap: 'wrap' }}>
+            <h2>Sales by product</h2>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <span style={{ color: 'var(--muted)' }}>to</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th className="num">Qty</th>
+                  <th className="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byProduct.map((r) => (
+                  <tr key={r.name}>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
+                    <td className="num">{r.qty}</td>
+                    <td className="num">{money(r.amount)}</td>
+                  </tr>
+                ))}
+                {byProduct.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="empty">
+                      No sales in this range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {report === 'vendor' ? (
+        <div className="panel">
+          <div className="panel-head" style={{ paddingBottom: 12, flexWrap: 'wrap' }}>
+            <h2>Spend by vendor</h2>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <span style={{ color: 'var(--muted)' }}>to</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th className="num">Expenses</th>
+                  <th className="num">POs</th>
+                  <th className="num">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byVendor.map((r) => (
+                  <tr key={r.name}>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
+                    <td className="num">{money(r.expenses)}</td>
+                    <td className="num">{money(r.pos)}</td>
+                    <td className="num">{money(r.total)}</td>
+                  </tr>
+                ))}
+                {byVendor.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      No vendor spend in this range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

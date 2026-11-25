@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { invoiceTotals } from '../lib/accounting';
+import { invoiceBodyText, invoiceTotals } from '../lib/accounting';
+import { stockQty } from '../lib/inventory';
 import { addDaysISO, money, shortDate, todayISO } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
@@ -10,24 +11,31 @@ import type { Invoice } from '../types';
 type LineDraft = { productId: string; description: string; qty: number; rate: number };
 
 export function Invoices() {
-  const { state, saveInvoice, receivePayment } = useBooks();
+  const { state, saveInvoice, receivePayment, markInvoiceEmailed } = useBooks();
   const [params, setParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [tab, setTab] = useState<'all' | Invoice['status']>('all');
+  const [payInv, setPayInv] = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState(0);
+  const [payMethod, setPayMethod] = useState('Check');
+  const [payMemo, setPayMemo] = useState('');
 
   const [customerId, setCustomerId] = useState(state.customers[0]?.id ?? '');
+  const [locationId, setLocationId] = useState(
+    state.locations.find((l) => l.isActive)?.id ?? '',
+  );
   const [date, setDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState(addDaysISO(todayISO(), 30));
   const [status, setStatus] = useState<Invoice['status']>('sent');
-  const [message, setMessage] = useState('Thanks for your business.');
+  const [message, setMessage] = useState('Thank you for your business with ABC LLC.');
   const [lines, setLines] = useState<LineDraft[]>([
     { productId: '', description: '', qty: 1, rate: 0 },
   ]);
 
   useEffect(() => {
     if (params.get('new') === '1') {
-      openNew();
+      openNew(params.get('customer') ?? undefined);
       setParams({}, { replace: true });
     }
   }, [params, setParams]);
@@ -38,13 +46,14 @@ export function Invoices() {
     return list.filter((i) => i.status === tab);
   }, [state.invoices, tab]);
 
-  function openNew() {
+  function openNew(presetCustomer?: string) {
     setEditing(null);
-    setCustomerId(state.customers[0]?.id ?? '');
+    setCustomerId(presetCustomer || state.customers[0]?.id || '');
+    setLocationId(state.locations.find((l) => l.isActive)?.id ?? '');
     setDate(todayISO());
     setDueDate(addDaysISO(todayISO(), 30));
     setStatus('sent');
-    setMessage('Thanks for your business.');
+    setMessage('Thank you for your business with ABC LLC.');
     setLines([{ productId: '', description: '', qty: 1, rate: 0 }]);
     setOpen(true);
   }
@@ -52,9 +61,10 @@ export function Invoices() {
   function openEdit(inv: Invoice) {
     setEditing(inv);
     setCustomerId(inv.customerId);
+    setLocationId(inv.locationId || state.locations.find((l) => l.isActive)?.id || '');
     setDate(inv.date);
     setDueDate(inv.dueDate);
-    setStatus(inv.status === 'paid' ? 'paid' : inv.status);
+    setStatus(inv.status === 'paid' ? 'paid' : inv.status === 'partial' ? 'partial' : inv.status);
     setMessage(inv.message);
     setLines(
       inv.lines.map((l) => ({
@@ -91,6 +101,7 @@ export function Invoices() {
     saveInvoice({
       id: editing?.id,
       customerId,
+      locationId,
       date,
       dueDate,
       status: asDraft ? 'draft' : status === 'draft' ? 'sent' : status,
@@ -100,20 +111,48 @@ export function Invoices() {
     setOpen(false);
   }
 
+  function openPay(inv: Invoice) {
+    setPayInv(inv);
+    setPayAmount(inv.balance);
+    setPayMethod('Check');
+    setPayMemo('');
+  }
+
+  function confirmPay() {
+    if (!payInv || payAmount <= 0) return;
+    receivePayment(payInv.id, payAmount, payMethod, payMemo);
+    setPayInv(null);
+  }
+
+  function emailInvoice(inv: Invoice) {
+    const customer = state.customers.find((c) => c.id === inv.customerId);
+    const body = invoiceBodyText(state.company, customer, inv);
+    const subject = encodeURIComponent(
+      `Invoice #${inv.number} from ${state.company.name}`,
+    );
+    const mailto = `mailto:${encodeURIComponent(customer?.email || '')}?subject=${subject}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, '_blank');
+    markInvoiceEmailed(inv.id);
+  }
+
+  const paymentsForEdit = editing
+    ? state.payments.filter((p) => p.invoiceId === editing.id)
+    : [];
+
   return (
     <div>
       <div className="page-header">
         <div>
           <h1>Invoices</h1>
-          <p>Create, send, and record payments — just like your day-to-day books.</p>
+          <p>Create, email, and record full or partial payments.</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>
+        <button className="btn btn-primary" onClick={() => openNew()}>
           Create invoice
         </button>
       </div>
 
       <div className="tabs">
-        {(['all', 'draft', 'sent', 'overdue', 'paid'] as const).map((t) => (
+        {(['all', 'draft', 'sent', 'partial', 'overdue', 'paid'] as const).map((t) => (
           <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t === 'all' ? 'All' : t}
           </button>
@@ -128,6 +167,7 @@ export function Invoices() {
                 <th>Date</th>
                 <th>No.</th>
                 <th>Customer</th>
+                <th>Location</th>
                 <th>Due</th>
                 <th>Status</th>
                 <th className="num">Total</th>
@@ -138,11 +178,13 @@ export function Invoices() {
             <tbody>
               {filtered.map((inv) => {
                 const customer = state.customers.find((c) => c.id === inv.customerId);
+                const loc = state.locations.find((l) => l.id === inv.locationId);
                 return (
                   <tr key={inv.id}>
                     <td>{shortDate(inv.date)}</td>
                     <td style={{ fontWeight: 700 }}>#{inv.number}</td>
                     <td>{customer?.name}</td>
+                    <td>{loc?.code ?? '—'}</td>
                     <td>{shortDate(inv.dueDate)}</td>
                     <td>
                       <StatusBadge status={inv.status} />
@@ -150,16 +192,18 @@ export function Invoices() {
                     <td className="num">{money(inv.total)}</td>
                     <td className="num">{money(inv.balance)}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => openEdit(inv)}>
                           Open
                         </button>
+                        {customer?.email ? (
+                          <button className="btn btn-ghost btn-sm" onClick={() => emailInvoice(inv)}>
+                            Email
+                          </button>
+                        ) : null}
                         {inv.balance > 0 && inv.status !== 'draft' && inv.status !== 'void' ? (
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => receivePayment(inv.id)}
-                          >
-                            Receive payment
+                          <button className="btn btn-primary btn-sm" onClick={() => openPay(inv)}>
+                            Record payment
                           </button>
                         ) : null}
                       </div>
@@ -169,7 +213,7 @@ export function Invoices() {
               })}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="empty">
+                  <td colSpan={9} className="empty">
                     No invoices in this view.
                   </td>
                 </tr>
@@ -211,10 +255,23 @@ export function Invoices() {
               </select>
             </div>
             <div className="field">
+              <label>Fulfill from location</label>
+              <select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                {state.locations
+                  .filter((l) => l.isActive)
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} ({l.code})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="field">
               <label>Status</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as Invoice['status'])}>
                 <option value="draft">Draft</option>
                 <option value="sent">Sent</option>
+                <option value="partial">Partial</option>
                 <option value="paid">Paid</option>
               </select>
             </div>
@@ -256,6 +313,9 @@ export function Invoices() {
                           {state.products.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
+                              {p.type === 'inventory' && locationId
+                                ? ` (${stockQty(state.stock, p.id, locationId)} @ loc)`
+                                : ''}
                             </option>
                           ))}
                         </select>
@@ -265,17 +325,18 @@ export function Invoices() {
                           value={line.description}
                           onChange={(e) =>
                             setLines((prev) =>
-                              prev.map((l, i) => (i === idx ? { ...l, description: e.target.value } : l)),
+                              prev.map((l, i) =>
+                                i === idx ? { ...l, description: e.target.value } : l,
+                              ),
                             )
                           }
-                          placeholder="Description"
+                          style={{ width: '100%', border: 'none', padding: 8 }}
                         />
                       </td>
                       <td>
                         <input
                           type="number"
                           min={0}
-                          step={1}
                           value={line.qty}
                           onChange={(e) =>
                             setLines((prev) =>
@@ -284,13 +345,14 @@ export function Invoices() {
                               ),
                             )
                           }
+                          style={{ width: '100%', border: 'none', padding: 8 }}
                         />
                       </td>
                       <td>
                         <input
                           type="number"
                           min={0}
-                          step={0.01}
+                          step="0.01"
                           value={line.rate}
                           onChange={(e) =>
                             setLines((prev) =>
@@ -299,11 +361,10 @@ export function Invoices() {
                               ),
                             )
                           }
+                          style={{ width: '100%', border: 'none', padding: 8 }}
                         />
                       </td>
-                      <td className="num" style={{ fontWeight: 700, paddingRight: 12 }}>
-                        {money(line.qty * line.rate)}
-                      </td>
+                      <td className="num">{money(line.qty * line.rate)}</td>
                       <td>
                         <button
                           className="btn btn-ghost btn-sm"
@@ -320,35 +381,105 @@ export function Invoices() {
             </div>
             <button
               className="btn btn-ghost btn-sm"
-              style={{ marginTop: 10 }}
+              style={{ marginTop: 8 }}
               onClick={() =>
                 setLines((prev) => [...prev, { productId: '', description: '', qty: 1, rate: 0 }])
               }
             >
-              + Add line
+              + Line
             </button>
+            <div style={{ textAlign: 'right', marginTop: 12 }}>
+              <div>Subtotal {money(totals.subtotal)}</div>
+              <div>Tax {money(totals.tax)}</div>
+              <div style={{ fontWeight: 700 }}>Total {money(totals.total)}</div>
+            </div>
           </div>
 
-          <div className="form-grid" style={{ marginTop: 16 }}>
+          <div className="field" style={{ marginTop: 14 }}>
+            <label>Message</label>
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} />
+          </div>
+
+          {paymentsForEdit.length > 0 ? (
+            <div style={{ marginTop: 16 }}>
+              <strong>Payment history</strong>
+              <div className="table-wrap" style={{ marginTop: 8 }}>
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Method</th>
+                      <th>Memo</th>
+                      <th className="num">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentsForEdit.map((p) => (
+                      <tr key={p.id}>
+                        <td>{shortDate(p.date)}</td>
+                        <td>{p.method}</td>
+                        <td>{p.memo || '—'}</td>
+                        <td className="num">{money(p.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </Modal>
+      ) : null}
+
+      {payInv ? (
+        <Modal
+          title={`Record payment — #${payInv.number}`}
+          onClose={() => setPayInv(null)}
+          footer={
+            <>
+              <button className="btn btn-ghost" onClick={() => setPayInv(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={confirmPay}
+                disabled={payAmount <= 0 || payAmount > payInv.balance + 0.001}
+              >
+                Apply payment
+              </button>
+            </>
+          }
+        >
+          <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+            Balance due {money(payInv.balance)}. Enter any amount up to the balance for a partial
+            payment.
+          </p>
+          <div className="form-grid two">
             <div className="field">
-              <label>Message on invoice</label>
-              <textarea value={message} onChange={(e) => setMessage(e.target.value)} />
+              <label>Amount</label>
+              <input
+                type="number"
+                min={0.01}
+                step="0.01"
+                max={payInv.balance}
+                value={payAmount}
+                onChange={(e) => setPayAmount(Number(e.target.value))}
+                autoFocus
+              />
+            </div>
+            <div className="field">
+              <label>Method</label>
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+                <option>Check</option>
+                <option>Cash</option>
+                <option>Card</option>
+                <option>ACH / Wire</option>
+                <option>Other</option>
+              </select>
             </div>
           </div>
-
-          <div className="totals-box">
-            <div className="totals-row">
-              <span>Subtotal</span>
-              <span>{money(totals.subtotal)}</span>
-            </div>
-            <div className="totals-row">
-              <span>Tax (8%)</span>
-              <span>{money(totals.tax)}</span>
-            </div>
-            <div className="totals-row grand">
-              <span>Total</span>
-              <span>{money(totals.total)}</span>
-            </div>
+          <div className="field" style={{ marginTop: 14 }}>
+            <label>Memo</label>
+            <input value={payMemo} onChange={(e) => setPayMemo(e.target.value)} />
           </div>
         </Modal>
       ) : null}

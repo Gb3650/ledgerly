@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { profitAndLoss, unpaidInvoices } from '../lib/accounting';
+import { inventoryMatrix } from '../lib/inventory';
 import { money, shortDate } from '../lib/format';
+import { QuickOrder } from '../components/QuickOrder';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
 
@@ -14,7 +16,9 @@ export function Dashboard() {
   const openBalance = openInvoices.reduce((s, i) => s + i.balance, 0);
   const overdue = state.invoices.filter((i) => i.status === 'overdue');
   const banks = state.accounts.filter((a) => a.type === 'bank' || a.type === 'credit_card');
-  const unmatched = state.transactions.filter((t) => !t.matched).length;
+  const lowStock = inventoryMatrix(state).filter(
+    (r) => r.product.reorderPoint != null && r.total <= r.product.reorderPoint,
+  );
 
   const months = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
   const incomeSeries = [8200, 9100, 7600, 11200, 10476, pl.income > 0 ? Math.min(pl.income, 14000) : 9800];
@@ -34,17 +38,19 @@ export function Dashboard() {
       <div className="page-header">
         <div>
           <h1>Dashboard</h1>
-          <p>Profit, cash, and open invoices for {state.company.name}</p>
+          <p>Profit, cash, inventory, and open invoices for {state.company.name}</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Link className="btn btn-ghost" to="/invoices?new=1">
-            Create invoice
+          <Link className="btn btn-ghost" to="/inventory">
+            {lowStock.length ? `${lowStock.length} low stock` : 'Inventory'}
           </Link>
-          <Link className="btn btn-primary" to="/banking">
-            Review {unmatched} bank items
+          <Link className="btn btn-primary" to="/invoices?new=1">
+            Create invoice
           </Link>
         </div>
       </div>
+
+      <QuickOrder />
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
         <div className="panel stat positive">
@@ -55,7 +61,7 @@ export function Dashboard() {
         <div className="panel stat">
           <div className="stat-label">Income</div>
           <div className="stat-value">{money(pl.income)}</div>
-          <div className="stat-hint">Paid invoices this year</div>
+          <div className="stat-hint">Payments collected this year</div>
         </div>
         <div className="panel stat">
           <div className="stat-label">Expenses</div>

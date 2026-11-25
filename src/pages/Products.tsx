@@ -18,7 +18,16 @@ export function Products() {
 
   function onSave() {
     if (!name.trim()) return;
-    addProduct({ name, description, sku, unitPrice, type, incomeAccountId });
+    addProduct({
+      name,
+      description,
+      sku,
+      unitPrice,
+      type,
+      incomeAccountId,
+      qtyOnHand: 0,
+      reorderPoint: type === 'inventory' ? 5 : undefined,
+    });
     setOpen(false);
     setName('');
     setDescription('');
@@ -48,6 +57,7 @@ export function Products() {
                 <th>SKU</th>
                 <th>Type</th>
                 <th>Income account</th>
+                <th className="num">On hand</th>
                 <th className="num">Price</th>
               </tr>
             </thead>
@@ -61,6 +71,7 @@ export function Products() {
                   <td>{p.sku}</td>
                   <td style={{ textTransform: 'capitalize' }}>{p.type.replace('_', ' ')}</td>
                   <td>{state.accounts.find((a) => a.id === p.incomeAccountId)?.name}</td>
+                  <td className="num">{p.type === 'inventory' ? p.qtyOnHand : '—'}</td>
                   <td className="num">{money(p.unitPrice)}</td>
                 </tr>
               ))}

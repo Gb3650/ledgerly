@@ -4,14 +4,17 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  ClipboardList,
   CreditCard,
   FileText,
   LayoutDashboard,
+  MapPin,
   Menu,
   Package,
   Plus,
   Receipt,
   Search,
+  Settings,
   Users,
   Wallet,
   X,
@@ -23,7 +26,7 @@ const nav = [
     label: 'Overview',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/banking', icon: Wallet, label: 'Banking' },
+      { to: '/banking', icon: Wallet, label: 'Cash activity' },
     ],
   },
   {
@@ -36,8 +39,10 @@ const nav = [
     ],
   },
   {
-    label: 'Expenses',
+    label: 'Purchasing & stock',
     items: [
+      { to: '/purchase-orders', icon: ClipboardList, label: 'Purchase orders' },
+      { to: '/inventory', icon: MapPin, label: 'Inventory by location' },
       { to: '/expenses', icon: CreditCard, label: 'Expenses' },
       { to: '/vendors', icon: Building2, label: 'Vendors' },
     ],
@@ -47,6 +52,7 @@ const nav = [
     items: [
       { to: '/reports', icon: BarChart3, label: 'Reports' },
       { to: '/accounts', icon: BookOpen, label: 'Chart of accounts' },
+      { to: '/settings', icon: Settings, label: 'Settings' },
     ],
   },
 ];
@@ -75,7 +81,13 @@ export function Layout() {
       (c) => c.name.toLowerCase().includes(q) || c.company?.toLowerCase().includes(q),
     );
     if (customer) {
-      navigate('/customers');
+      navigate(`/customers/${customer.id}`);
+      setQuery('');
+      return;
+    }
+    const vendor = state.vendors.find((v) => v.name.toLowerCase().includes(q));
+    if (vendor) {
+      navigate(`/vendors/${vendor.id}`);
       setQuery('');
       return;
     }
@@ -116,7 +128,7 @@ export function Layout() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customers, invoices, vendors…"
+            placeholder="Search customers, vendors, invoices…"
             aria-label="Search"
           />
         </form>
@@ -134,6 +146,14 @@ export function Layout() {
                   }}
                 >
                   Invoice
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate('/purchase-orders');
+                  }}
+                >
+                  Purchase order
                 </button>
                 <button
                   onClick={() => {
@@ -188,11 +208,11 @@ export function Layout() {
       <main className="main">
         <div className="sample-banner">
           <span>
-            Sample company data for Harbor Studio Co. — changes save in this browser. Not affiliated
-            with Intuit QuickBooks.
+            Testing as <strong>{state.company.name}</strong> — data saves in this browser. Use
+            Settings → Download backup. Private app; not affiliated with Intuit QuickBooks.
           </span>
           <button className="btn btn-ghost btn-sm" onClick={resetSampleData}>
-            Reset sample data
+            Reset starter data
           </button>
         </div>
         <Outlet />

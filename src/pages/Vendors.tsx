@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { money, shortDate } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
@@ -58,7 +58,11 @@ export function Vendors() {
             <tbody>
               {state.vendors.map((v) => (
                 <tr key={v.id}>
-                  <td style={{ fontWeight: 700 }}>{v.name}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    <Link to={`/vendors/${v.id}`} style={{ color: 'var(--sea)' }}>
+                      {v.name}
+                    </Link>
+                  </td>
                   <td>{v.category}</td>
                   <td>{v.email}</td>
                   <td>{v.phone}</td>

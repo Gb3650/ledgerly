@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { money, shortDate } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
@@ -62,7 +62,11 @@ export function Customers() {
             <tbody>
               {sorted.map((c) => (
                 <tr key={c.id}>
-                  <td style={{ fontWeight: 700 }}>{c.name}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    <Link to={`/customers/${c.id}`} style={{ color: 'var(--sea)' }}>
+                      {c.name}
+                    </Link>
+                  </td>
                   <td>{c.company || '—'}</td>
                   <td>{c.email}</td>
                   <td>{c.phone}</td>
