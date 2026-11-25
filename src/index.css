@@ -833,6 +833,22 @@ table.data .num {
   animation: fadeUp 0.15s ease;
 }
 
+.menu-pop-qbo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  min-width: 360px;
+  padding: 14px 12px;
+}
+
+.menu-col-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 4px 12px 8px;
+}
+
 .menu-pop button {
   width: 100%;
   text-align: left;
@@ -846,6 +862,10 @@ table.data .num {
 .menu-pop button:hover {
   background: var(--sea-soft);
   color: var(--sea-deep);
+}
+
+.btn-new {
+  min-width: 88px;
 }
 
 .rel {

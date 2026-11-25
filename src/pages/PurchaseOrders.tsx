@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { invoiceTotals } from '../lib/accounting';
 import { addDaysISO, money, shortDate, todayISO } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
+
 type LineDraft = { productId: string; description: string; qty: number; rate: number };
 
 export function PurchaseOrders() {
   const { state, savePurchaseOrder, receivePo } = useBooks();
+  const [params, setParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [vendorId, setVendorId] = useState(state.vendors[0]?.id ?? '');
   const [locationId, setLocationId] = useState(
@@ -67,6 +70,13 @@ export function PurchaseOrders() {
     setLines([{ productId: '', description: '', qty: 1, rate: 0 }]);
     setOpen(true);
   }
+
+  useEffect(() => {
+    if (params.get('new') === '1') {
+      openNew();
+      setParams({}, { replace: true });
+    }
+  }, [params, setParams]);
 
   return (
     <div>

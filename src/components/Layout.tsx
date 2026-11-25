@@ -21,12 +21,13 @@ import {
 } from 'lucide-react';
 import { useBooks } from '../store/BooksContext';
 
+/** QBO-style left navigation */
 const nav = [
   {
-    label: 'Overview',
+    label: '',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/banking', icon: Wallet, label: 'Cash activity' },
+      { to: '/banking', icon: Wallet, label: 'Banking' },
     ],
   },
   {
@@ -39,20 +40,41 @@ const nav = [
     ],
   },
   {
-    label: 'Purchasing & stock',
+    label: 'Expenses',
     items: [
-      { to: '/purchase-orders', icon: ClipboardList, label: 'Purchase orders' },
-      { to: '/inventory', icon: MapPin, label: 'Inventory by location' },
       { to: '/expenses', icon: CreditCard, label: 'Expenses' },
       { to: '/vendors', icon: Building2, label: 'Vendors' },
+      { to: '/purchase-orders', icon: ClipboardList, label: 'Purchase orders' },
+      { to: '/inventory', icon: MapPin, label: 'Inventory' },
     ],
   },
   {
-    label: 'Books',
+    label: 'Accounting',
     items: [
       { to: '/reports', icon: BarChart3, label: 'Reports' },
       { to: '/accounts', icon: BookOpen, label: 'Chart of accounts' },
       { to: '/settings', icon: Settings, label: 'Settings' },
+    ],
+  },
+];
+
+const newMenu = [
+  {
+    label: 'CUSTOMERS',
+    items: [
+      { to: '/invoices?new=1', label: 'Invoice' },
+      { to: '/customers?new=1', label: 'Customer' },
+      { to: '/products', label: 'Product/service' },
+      { to: '/sales', label: 'All sales' },
+    ],
+  },
+  {
+    label: 'VENDORS',
+    items: [
+      { to: '/expenses?new=1', label: 'Expense' },
+      { to: '/purchase-orders?new=1', label: 'Purchase order' },
+      { to: '/vendors?new=1', label: 'Vendor' },
+      { to: '/inventory', label: 'Inventory' },
     ],
   },
 ];
@@ -91,6 +113,11 @@ export function Layout() {
       setQuery('');
       return;
     }
+    if (q.includes('po') || q.includes('purchase')) {
+      navigate('/purchase-orders');
+      setQuery('');
+      return;
+    }
     const inv = state.invoices.find(
       (i) => i.number.includes(q) || `inv-${i.number}`.includes(q),
     );
@@ -116,7 +143,7 @@ export function Layout() {
           <div className="brand-mark">L</div>
           <div className="brand-text">
             <div className="brand-name">Ledgerly</div>
-            <div className="brand-sub">Online books</div>
+            <div className="brand-sub">Books</div>
           </div>
         </div>
         <div className="company-pill">
@@ -128,57 +155,37 @@ export function Layout() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customers, vendors, invoices…"
+            placeholder="Search receipts, customers, vendors, invoices…"
             aria-label="Search"
           />
         </form>
         <div className="top-actions">
           <div className="rel" ref={menuRef}>
-            <button className="btn btn-primary" onClick={() => setMenuOpen((v) => !v)}>
+            <button
+              className="btn btn-primary btn-new"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+            >
               <Plus size={16} /> New
             </button>
             {menuOpen ? (
-              <div className="menu-pop">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/invoices?new=1');
-                  }}
-                >
-                  Invoice
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/purchase-orders');
-                  }}
-                >
-                  Purchase order
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/expenses?new=1');
-                  }}
-                >
-                  Expense
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/customers?new=1');
-                  }}
-                >
-                  Customer
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/vendors?new=1');
-                  }}
-                >
-                  Vendor
-                </button>
+              <div className="menu-pop menu-pop-qbo">
+                {newMenu.map((col) => (
+                  <div className="menu-col" key={col.label}>
+                    <div className="menu-col-label">{col.label}</div>
+                    {col.items.map((item) => (
+                      <button
+                        key={item.to + item.label}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate(item.to);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
               </div>
             ) : null}
           </div>
@@ -186,9 +193,9 @@ export function Layout() {
       </header>
 
       <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
-        {nav.map((section) => (
-          <div className="nav-section" key={section.label}>
-            <div className="nav-label">{section.label}</div>
+        {nav.map((section, idx) => (
+          <div className="nav-section" key={section.label || `top-${idx}`}>
+            {section.label ? <div className="nav-label">{section.label}</div> : null}
             {section.items.map((item) => (
               <NavLink
                 key={item.to}
@@ -209,7 +216,7 @@ export function Layout() {
         <div className="sample-banner">
           <span>
             Testing as <strong>{state.company.name}</strong> — data saves in this browser. Use
-            Settings → Download backup. Private app; not affiliated with Intuit QuickBooks.
+            Settings → Download backup. Not affiliated with Intuit QuickBooks.
           </span>
           <button className="btn btn-ghost btn-sm" onClick={resetSampleData}>
             Reset starter data
