@@ -107,20 +107,28 @@ export function Settings() {
         </div>
         <div className="panel-pad">
           <p style={{ color: 'var(--muted)', marginTop: 0 }}>
-            Books currently save in this browser. Download a backup so you don&apos;t lose test data.
-            Cloud database persistence can be added next.
+            Books save in this browser and sync to your private cloud database when published.
+            Download a backup before major changes. Reset reloads the ABC LLC starter set and
+            overwrites cloud books when sync is available.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={downloadBackup}>
+            <button type="button" className="btn btn-primary" onClick={downloadBackup}>
               Download backup
             </button>
-            <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
+            <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
               Restore backup
             </button>
             <button
+              type="button"
               className="btn btn-ghost"
               onClick={() => {
-                if (confirm('Reset to ABC LLC sample starter data?')) resetSampleData();
+                if (
+                  window.confirm(
+                    'Reset to ABC LLC sample starter data? This replaces current books here and in cloud sync.',
+                  )
+                ) {
+                  resetSampleData();
+                }
               }}
             >
               Reset sample data
