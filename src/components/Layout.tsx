@@ -54,7 +54,7 @@ const newMenu = [
     label: 'VENDORS',
     items: [
       { to: '/expenses?new=1', label: 'Expense' },
-      { to: '/banking', label: 'Check' },
+      { to: '/checks?new=1', label: 'Check' },
       { to: '/bills?new=1', label: 'Bill' },
       { to: '/pay-bills', label: 'Pay bills' },
       { to: '/purchase-orders?new=1', label: 'Purchase order' },
@@ -64,9 +64,9 @@ const newMenu = [
   {
     label: 'OTHER',
     items: [
-      { to: '/banking', label: 'Bank deposit' },
-      { to: '/banking', label: 'Transfer' },
-      { to: '/banking', label: 'Reconcile' },
+      { to: '/bank-deposit', label: 'Bank deposit' },
+      { to: '/transfer', label: 'Transfer' },
+      { to: '/reconcile', label: 'Reconcile' },
       { to: '/inventory', label: 'Inventory qty adjustment' },
       { to: '/accounts', label: 'Chart of accounts' },
     ],
@@ -80,7 +80,7 @@ const gearMenu = [
       { to: '/settings', label: 'Account and settings' },
       { to: '/accounts', label: 'Chart of accounts' },
       { to: '/products', label: 'Products and services' },
-      { to: '/banking', label: 'Reconcile' },
+      { to: '/reconcile', label: 'Reconcile' },
     ],
   },
   {

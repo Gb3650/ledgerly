@@ -18,7 +18,17 @@ export type AccountType =
   | 'other_income'
   | 'other_expense';
 
-export type TxnType = 'deposit' | 'expense' | 'transfer' | 'payment' | 'sales_receipt' | 'bill_payment';
+export type TxnType =
+  | 'deposit'
+  | 'expense'
+  | 'transfer'
+  | 'payment'
+  | 'sales_receipt'
+  | 'bill_payment'
+  | 'check';
+
+export type CheckStatus = 'open' | 'void';
+export type ReconcileStatus = 'in_progress' | 'completed';
 
 export type StockMovementReason =
   | 'po_receive'
@@ -205,6 +215,8 @@ export interface Payment {
   method: string;
   memo: string;
   createdAt: string;
+  /** Set when included in a bank deposit (QBO undeposited → bank). */
+  depositId?: string;
 }
 
 export interface Expense {
@@ -295,6 +307,68 @@ export interface BankTransaction {
   categoryAccountId?: string;
   matched: boolean;
   payee?: string;
+  /** Cleared in a completed bank reconciliation. */
+  cleared?: boolean;
+  checkId?: string;
+  transferId?: string;
+  depositId?: string;
+}
+
+/** QBO Check — pay from a bank account. */
+export interface CheckTxn {
+  id: string;
+  number: string;
+  bankAccountId: string;
+  payeeId?: string;
+  payeeName: string;
+  categoryAccountId: string;
+  date: string;
+  amount: number;
+  memo: string;
+  status: CheckStatus;
+  createdAt: string;
+}
+
+/** Move money between bank / credit card accounts. */
+export interface FundTransfer {
+  id: string;
+  date: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  memo: string;
+  createdAt: string;
+}
+
+export interface BankDepositLine {
+  id: string;
+  paymentId?: string;
+  description: string;
+  amount: number;
+}
+
+/** Deposit undeposited payments (and optional other funds) into a bank account. */
+export interface BankDeposit {
+  id: string;
+  number: string;
+  date: string;
+  bankAccountId: string;
+  memo: string;
+  lines: BankDepositLine[];
+  total: number;
+  createdAt: string;
+}
+
+export interface BankReconciliation {
+  id: string;
+  accountId: string;
+  statementEndingDate: string;
+  statementEndingBalance: number;
+  beginningBalance: number;
+  clearedTxnIds: string[];
+  status: ReconcileStatus;
+  completedAt?: string;
+  createdAt: string;
 }
 
 export interface BooksState {
@@ -316,9 +390,15 @@ export interface BooksState {
   billPayments: BillPayment[];
   purchaseOrders: PurchaseOrder[];
   transactions: BankTransaction[];
+  checks: CheckTxn[];
+  fundTransfers: FundTransfer[];
+  bankDeposits: BankDeposit[];
+  reconciliations: BankReconciliation[];
   nextInvoiceNumber: number;
   nextPoNumber: number;
   nextQuoteNumber: number;
   nextReceiptNumber: number;
   nextBillNumber: number;
+  nextCheckNumber: number;
+  nextDepositNumber: number;
 }
