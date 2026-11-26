@@ -87,8 +87,22 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [resetFlash, setResetFlash] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  function onResetStarter() {
+    if (
+      !window.confirm(
+        'Reset to ABC LLC starter books? This replaces invoices, inventory, and other data in this browser (and cloud sync when available).',
+      )
+    ) {
+      return;
+    }
+    resetSampleData();
+    setResetFlash(true);
+    window.setTimeout(() => setResetFlash(false), 2500);
+  }
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -230,10 +244,19 @@ export function Layout() {
       <main className="main">
         <div className="sample-banner">
           <span>
-            Testing as <strong>{state.company.name}</strong> — data saves in this browser. Use
-            Settings → Download backup. Not affiliated with Intuit QuickBooks.
+            Testing as <strong>{state.company.name}</strong> — data saves in this browser
+            {resetFlash ? (
+              <>
+                {' '}
+                · <strong style={{ color: 'var(--sea)' }}>Starter data restored</strong>
+              </>
+            ) : (
+              <>
+                . Use Settings → Download backup. Not affiliated with Intuit QuickBooks.
+              </>
+            )}
           </span>
-          <button className="btn btn-ghost btn-sm" onClick={resetSampleData}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onResetStarter}>
             Reset starter data
           </button>
         </div>

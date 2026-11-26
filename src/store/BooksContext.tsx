@@ -172,12 +172,15 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<'local' | 'cloud' | 'syncing' | 'error'>('local');
   const hydrated = useRef(false);
   const skipCloud = useRef(false);
+  /** Bumped to ignore stale /api/books responses after reset or remount. */
+  const cloudLoadId = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    const loadId = ++cloudLoadId.current;
     (async () => {
       const cloud = await fetchCloudBooks();
-      if (cancelled) return;
+      if (cancelled || loadId !== cloudLoadId.current) return;
       if (cloud?.company) {
         skipCloud.current = true;
         setState(normalize(cloud));
@@ -208,7 +211,25 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     setState((prev) => normalize(updater(prev)));
   }, []);
 
-  const resetSampleData = useCallback(() => setState(normalize(createSeed())), []);
+  const resetSampleData = useCallback(() => {
+    // Invalidate any in-flight cloud hydrate so it cannot overwrite this reset.
+    cloudLoadId.current += 1;
+    const seed = normalize(createSeed());
+    skipCloud.current = true;
+    setState(seed);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    } catch {
+      /* ignore quota */
+    }
+    hydrated.current = true;
+    skipCloud.current = false;
+    setSyncStatus('syncing');
+    // Persist seed to Postgres immediately so the next reload stays reset.
+    void saveCloudBooks(seed).then((ok) => {
+      setSyncStatus(ok ? 'cloud' : 'local');
+    });
+  }, []);
 
   const updateCompany = useCallback(
     (patch: Partial<BooksState['company']>) => {
