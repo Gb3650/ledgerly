@@ -60,12 +60,16 @@ export async function PUT(request: Request) {
     if (!body?.books || typeof body.books !== 'object' || !body.books.company) {
       return Response.json({ error: 'invalid_books' }, { status: 400 });
     }
+    const payload = JSON.stringify(body.books);
+    if (payload.length > 1_000_000) {
+      return Response.json({ error: 'payload_too_large' }, { status: 413 });
+    }
     await sql(
       `insert into books_store (owner_sub, payload, updated_at)
        values ($1, $2::jsonb, now())
        on conflict (owner_sub) do update
        set payload = excluded.payload, updated_at = now()`,
-      [storeKey(identity), JSON.stringify(body.books)],
+      [storeKey(identity), payload],
     );
     return Response.json(
       { ok: true },

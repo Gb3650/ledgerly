@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 
 export function Settings() {
   const { state, syncStatus, updateCompany, exportBooks, importBooks, resetSampleData } =
     useBooks();
+  const navigate = useNavigate();
   const [company, setCompany] = useState(state.company);
   const [saved, setSaved] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function save() {
@@ -118,19 +122,7 @@ export function Settings() {
             <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
               Restore backup
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Reset to ABC LLC sample starter data? This replaces current books here and in cloud sync.',
-                  )
-                ) {
-                  resetSampleData();
-                }
-              }}
-            >
+            <button type="button" className="btn btn-ghost" onClick={() => setResetOpen(true)}>
               Reset sample data
             </button>
           </div>
@@ -150,6 +142,36 @@ export function Settings() {
           ) : null}
         </div>
       </div>
+
+      {resetOpen ? (
+        <Modal
+          title="Reset sample data?"
+          onClose={() => setResetOpen(false)}
+          footer={
+            <>
+              <button type="button" className="btn btn-ghost" onClick={() => setResetOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  resetSampleData();
+                  setResetOpen(false);
+                  navigate('/');
+                }}
+              >
+                Reset to sample books
+              </button>
+            </>
+          }
+        >
+          <p style={{ marginTop: 0, lineHeight: 1.6 }}>
+            This replaces current books with the ABC LLC starter set in this browser and cloud sync
+            when available.
+          </p>
+        </Modal>
+      ) : null}
     </div>
   );
 }
