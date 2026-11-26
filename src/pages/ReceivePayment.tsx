@@ -171,7 +171,13 @@ export function ReceivePayment() {
                   {depositAccount?.name ?? 'Undeposited Funds'}
                 </option>
               </select>
-              <div className="field-hint">Held until Bank deposit (QBO Undeposited Funds).</div>
+              <div className="field-hint">
+                Held until{' '}
+                <Link to="/bank-deposit" style={{ color: 'var(--sea)', fontWeight: 700 }}>
+                  Bank deposit
+                </Link>{' '}
+                (QBO Undeposited Funds).
+              </div>
             </div>
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Memo</label>

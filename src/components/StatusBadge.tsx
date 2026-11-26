@@ -4,9 +4,14 @@ export function StatusBadge({ status }: { status: string }) {
     status === 'matched' ||
     status === 'received' ||
     status === 'accepted' ||
-    status === 'converted'
+    status === 'converted' ||
+    status === 'completed'
       ? 'badge-paid'
-      : status === 'sent' || status === 'pending' || status === 'partial' || status === 'open'
+      : status === 'sent' ||
+          status === 'pending' ||
+          status === 'partial' ||
+          status === 'open' ||
+          status === 'in_progress'
         ? 'badge-sent'
         : status === 'overdue' ||
             status === 'unmatched' ||

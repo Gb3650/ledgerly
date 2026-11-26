@@ -37,11 +37,15 @@ export const expensesHubTabs: HubTab[] = [
   { to: '/inventory', label: 'Inventory' },
 ];
 
-/** Banking extras (checks/deposit/transfer/reconcile) land in the stacked banking PR. */
 export const bankingHubTabs: HubTab[] = [
   { to: '/banking', label: 'Bank transactions', end: true },
+  { to: '/checks', label: 'Checks' },
+  { to: '/bank-deposit', label: 'Bank deposit' },
+  { to: '/transfer', label: 'Transfer' },
+  { to: '/reconcile', label: 'Reconcile' },
 ];
 
 export const accountingHubTabs: HubTab[] = [
   { to: '/accounts', label: 'Chart of accounts', end: true },
+  { to: '/reconcile', label: 'Reconcile' },
 ];

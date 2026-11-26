@@ -15,6 +15,7 @@ import {
   markBillsOverdue,
   markOverdue,
   refreshBalances,
+  undepositedPayments,
 } from '../lib/accounting';
 import { fetchCloudBooks, saveCloudBooks } from '../lib/cloudBooks';
 import {
@@ -151,6 +152,39 @@ interface BooksContextValue {
   receivePo: (poId: string, receiveAll?: boolean) => void;
   matchTransaction: (id: string, categoryAccountId: string) => void;
   excludeTransaction: (id: string) => void;
+  writeCheck: (input: {
+    bankAccountId: string;
+    payeeId?: string;
+    payeeName: string;
+    categoryAccountId: string;
+    date: string;
+    amount: number;
+    memo: string;
+    number?: string;
+  }) => string;
+  voidCheck: (checkId: string) => void;
+  transferFunds: (input: {
+    fromAccountId: string;
+    toAccountId: string;
+    amount: number;
+    date: string;
+    memo: string;
+  }) => boolean;
+  createBankDeposit: (input: {
+    bankAccountId: string;
+    date: string;
+    memo: string;
+    paymentIds: string[];
+    otherAmount?: number;
+    otherDescription?: string;
+  }) => string | null;
+  completeReconciliation: (input: {
+    accountId: string;
+    statementEndingDate: string;
+    statementEndingBalance: number;
+    beginningBalance: number;
+    clearedTxnIds: string[];
+  }) => string | null;
 }
 
 const BooksContext = createContext<BooksContextValue | null>(null);
@@ -188,6 +222,12 @@ function normalize(raw: BooksState): BooksState {
     nextQuoteNumber: raw.nextQuoteNumber ?? 2001,
     nextReceiptNumber: raw.nextReceiptNumber ?? 9001,
     nextBillNumber: raw.nextBillNumber ?? 1001,
+    nextCheckNumber: raw.nextCheckNumber ?? 1001,
+    nextDepositNumber: raw.nextDepositNumber ?? 501,
+    checks: raw.checks ?? [],
+    fundTransfers: raw.fundTransfers ?? [],
+    bankDeposits: raw.bankDeposits ?? [],
+    reconciliations: raw.reconciliations ?? [],
     invoices: markOverdue(raw.invoices ?? []),
   });
 }
@@ -650,7 +690,6 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         const pay = Math.min(inv.balance, amount ?? inv.balance);
         const balance = Math.max(0, Math.round((inv.balance - pay) * 100) / 100);
         const status = balance === 0 ? 'paid' : 'partial';
-        const customer = prev.customers.find((c) => c.id === inv.customerId);
         return {
           ...prev,
           payments: [
@@ -668,23 +707,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
           invoices: prev.invoices.map((i) =>
             i.id === invoiceId ? { ...i, balance, status } : i,
           ),
-          transactions: [
-            {
-              id: uid('txn'),
-              accountId: 'acc_checking',
-              date: todayISO(),
-              description: `Payment — ${customer?.name ?? 'Customer'} INV-${inv.number}`,
-              amount: pay,
-              type: 'payment' as const,
-              matched: true,
-              categoryAccountId: 'acc_ar',
-              payee: customer?.name,
-            },
-            ...prev.transactions,
-          ],
-          accounts: prev.accounts.map((a) =>
-            a.id === 'acc_checking' ? { ...a, balance: a.balance + pay } : a,
-          ),
+          // Holds in Undeposited Funds until Bank deposit (QBO-style).
         };
       });
     },
@@ -1163,31 +1186,308 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         }
 
         if (total <= 0) return prev;
-        const customer = prev.customers.find((c) => c.id === input.customerId);
 
         return {
           ...prev,
           invoices,
           payments,
+          // Holds in Undeposited Funds until Bank deposit (QBO-style).
+        };
+      });
+    },
+    [commit],
+  );
+
+  const writeCheck = useCallback(
+    (input: {
+      bankAccountId: string;
+      payeeId?: string;
+      payeeName: string;
+      categoryAccountId: string;
+      date: string;
+      amount: number;
+      memo: string;
+      number?: string;
+    }) => {
+      let newId = uid('chk');
+      commit((prev) => {
+        if (input.amount <= 0 || !input.payeeName) return prev;
+        const number = input.number?.trim() || String(prev.nextCheckNumber ?? 1001);
+        newId = uid('chk');
+        const check = {
+          id: newId,
+          number,
+          bankAccountId: input.bankAccountId,
+          payeeId: input.payeeId,
+          payeeName: input.payeeName,
+          categoryAccountId: input.categoryAccountId,
+          date: input.date,
+          amount: input.amount,
+          memo: input.memo,
+          status: 'open' as const,
+          createdAt: todayISO(),
+        };
+        const usedNum = Number.parseInt(number, 10);
+        const nextCheck = Number.isFinite(usedNum)
+          ? Math.max(prev.nextCheckNumber ?? 1001, usedNum + 1)
+          : (prev.nextCheckNumber ?? 1001) + 1;
+        return {
+          ...prev,
+          checks: [check, ...(prev.checks ?? [])],
+          nextCheckNumber: nextCheck,
           accounts: prev.accounts.map((a) =>
-            a.id === 'acc_checking' ? { ...a, balance: a.balance + total } : a,
+            a.id === input.bankAccountId ? { ...a, balance: a.balance - input.amount } : a,
           ),
           transactions: [
             {
               id: uid('txn'),
-              accountId: 'acc_checking',
+              accountId: input.bankAccountId,
               date: input.date,
-              description: `Payment from ${customer?.name ?? 'customer'}`,
-              amount: total,
-              type: 'payment' as const,
+              description: `Check #${number} — ${input.payeeName}`,
+              amount: -input.amount,
+              type: 'check' as const,
               matched: true,
-              categoryAccountId: 'acc_ar',
-              payee: customer?.name,
+              categoryAccountId: input.categoryAccountId,
+              payee: input.payeeName,
+              cleared: false,
+              checkId: newId,
             },
             ...prev.transactions,
           ],
         };
       });
+      return newId;
+    },
+    [commit],
+  );
+
+  const voidCheck = useCallback(
+    (checkId: string) => {
+      commit((prev) => {
+        const check = (prev.checks ?? []).find((c) => c.id === checkId);
+        if (!check || check.status === 'void') return prev;
+        return {
+          ...prev,
+          checks: (prev.checks ?? []).map((c) =>
+            c.id === checkId ? { ...c, status: 'void' as const } : c,
+          ),
+          accounts: prev.accounts.map((a) =>
+            a.id === check.bankAccountId ? { ...a, balance: a.balance + check.amount } : a,
+          ),
+          transactions: prev.transactions.filter((t) => t.checkId !== checkId),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const transferFunds = useCallback(
+    (input: {
+      fromAccountId: string;
+      toAccountId: string;
+      amount: number;
+      date: string;
+      memo: string;
+    }) => {
+      if (
+        input.amount <= 0 ||
+        input.fromAccountId === input.toAccountId ||
+        !input.fromAccountId ||
+        !input.toAccountId
+      ) {
+        return false;
+      }
+      let ok = false;
+      commit((prev) => {
+        const from = prev.accounts.find((a) => a.id === input.fromAccountId);
+        const to = prev.accounts.find((a) => a.id === input.toAccountId);
+        if (!from || !to) return prev;
+        ok = true;
+        const transferId = uid('xfer');
+        const memo = input.memo || `Transfer to ${to.name}`;
+        return {
+          ...prev,
+          fundTransfers: [
+            {
+              id: transferId,
+              date: input.date,
+              fromAccountId: input.fromAccountId,
+              toAccountId: input.toAccountId,
+              amount: input.amount,
+              memo: input.memo,
+              createdAt: todayISO(),
+            },
+            ...(prev.fundTransfers ?? []),
+          ],
+          accounts: prev.accounts.map((a) => {
+            if (a.id === input.fromAccountId) return { ...a, balance: a.balance - input.amount };
+            if (a.id === input.toAccountId) return { ...a, balance: a.balance + input.amount };
+            return a;
+          }),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: input.fromAccountId,
+              date: input.date,
+              description: memo,
+              amount: -input.amount,
+              type: 'transfer' as const,
+              matched: true,
+              categoryAccountId: input.toAccountId,
+              cleared: false,
+              transferId,
+            },
+            {
+              id: uid('txn'),
+              accountId: input.toAccountId,
+              date: input.date,
+              description: input.memo || `Transfer from ${from.name}`,
+              amount: input.amount,
+              type: 'transfer' as const,
+              matched: true,
+              categoryAccountId: input.fromAccountId,
+              cleared: false,
+              transferId,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+      return ok;
+    },
+    [commit],
+  );
+
+  const createBankDeposit = useCallback(
+    (input: {
+      bankAccountId: string;
+      date: string;
+      memo: string;
+      paymentIds: string[];
+      otherAmount?: number;
+      otherDescription?: string;
+    }) => {
+      let depositId: string | null = null;
+      commit((prev) => {
+        const waiting = undepositedPayments(prev);
+        const selected = waiting.filter((p) => input.paymentIds.includes(p.id));
+        const other =
+          input.otherAmount && input.otherAmount > 0
+            ? Math.round(input.otherAmount * 100) / 100
+            : 0;
+        const payTotal = selected.reduce((s, p) => s + p.amount, 0);
+        const total = Math.round((payTotal + other) * 100) / 100;
+        if (total <= 0) return prev;
+
+        depositId = uid('dep');
+        const number = String(prev.nextDepositNumber ?? 501);
+        const lines = [
+          ...selected.map((p) => {
+            const inv = prev.invoices.find((i) => i.id === p.invoiceId);
+            const customer = prev.customers.find((c) => c.id === inv?.customerId);
+            return {
+              id: uid('dl'),
+              paymentId: p.id,
+              description: `Payment — ${customer?.name ?? 'Customer'}${inv ? ` INV-${inv.number}` : ''}`,
+              amount: p.amount,
+            };
+          }),
+          ...(other
+            ? [
+                {
+                  id: uid('dl'),
+                  description: input.otherDescription || 'Other funds',
+                  amount: other,
+                },
+              ]
+            : []),
+        ];
+
+        return {
+          ...prev,
+          bankDeposits: [
+            {
+              id: depositId!,
+              number,
+              date: input.date,
+              bankAccountId: input.bankAccountId,
+              memo: input.memo,
+              lines,
+              total,
+              createdAt: todayISO(),
+            },
+            ...(prev.bankDeposits ?? []),
+          ],
+          nextDepositNumber: (prev.nextDepositNumber ?? 501) + 1,
+          payments: (prev.payments ?? []).map((p) =>
+            input.paymentIds.includes(p.id) ? { ...p, depositId: depositId! } : p,
+          ),
+          accounts: prev.accounts.map((a) =>
+            a.id === input.bankAccountId ? { ...a, balance: a.balance + total } : a,
+          ),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: input.bankAccountId,
+              date: input.date,
+              description: input.memo || `Deposit #${number}`,
+              amount: total,
+              type: 'deposit' as const,
+              matched: true,
+              categoryAccountId: 'acc_undeposited',
+              cleared: false,
+              depositId: depositId!,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+      return depositId;
+    },
+    [commit],
+  );
+
+  const completeReconciliation = useCallback(
+    (input: {
+      accountId: string;
+      statementEndingDate: string;
+      statementEndingBalance: number;
+      beginningBalance: number;
+      clearedTxnIds: string[];
+    }) => {
+      let reconId: string | null = null;
+      commit((prev) => {
+        const cleared = prev.transactions.filter((t) => input.clearedTxnIds.includes(t.id));
+        const clearedAmount = cleared.reduce((s, t) => s + t.amount, 0);
+        const clearedBalance =
+          Math.round((input.beginningBalance + clearedAmount) * 100) / 100;
+        const difference =
+          Math.round((input.statementEndingBalance - clearedBalance) * 100) / 100;
+        if (Math.abs(difference) > 0.001) return prev;
+
+        reconId = uid('rec');
+        return {
+          ...prev,
+          reconciliations: [
+            {
+              id: reconId!,
+              accountId: input.accountId,
+              statementEndingDate: input.statementEndingDate,
+              statementEndingBalance: input.statementEndingBalance,
+              beginningBalance: input.beginningBalance,
+              clearedTxnIds: input.clearedTxnIds,
+              status: 'completed' as const,
+              completedAt: todayISO(),
+              createdAt: todayISO(),
+            },
+            ...(prev.reconciliations ?? []),
+          ],
+          transactions: prev.transactions.map((t) =>
+            input.clearedTxnIds.includes(t.id) ? { ...t, cleared: true, matched: true } : t,
+          ),
+        };
+      });
+      return reconId;
     },
     [commit],
   );
@@ -1351,6 +1651,11 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       receivePo,
       matchTransaction,
       excludeTransaction,
+      writeCheck,
+      voidCheck,
+      transferFunds,
+      createBankDeposit,
+      completeReconciliation,
     }),
     [
       state,
@@ -1388,6 +1693,11 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       receivePo,
       matchTransaction,
       excludeTransaction,
+      writeCheck,
+      voidCheck,
+      transferFunds,
+      createBankDeposit,
+      completeReconciliation,
     ],
   );
 
