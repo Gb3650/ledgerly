@@ -404,14 +404,25 @@ export function refreshBalances(state: BooksState): BooksState {
     invAsset.balance = valuation.totalValue;
   }
 
+  const openCredits = (state.creditMemos ?? []).filter(
+    (c) => c.status !== 'void' && c.balance > 0,
+  );
+  const openVendorCredits = (state.vendorCredits ?? []).filter(
+    (c) => c.status !== 'void' && c.balance > 0,
+  );
+
   const ar = accounts.find((a) => a.type === 'accounts_receivable');
   if (ar) {
-    ar.balance = unpaidInvoices(state.invoices).reduce((s, i) => s + i.balance, 0);
+    const invoiceAr = unpaidInvoices(state.invoices).reduce((s, i) => s + i.balance, 0);
+    const creditAr = openCredits.reduce((s, c) => s + c.balance, 0);
+    ar.balance = Math.round((invoiceAr - creditAr) * 100) / 100;
   }
 
   const ap = accounts.find((a) => a.type === 'accounts_payable');
   if (ap) {
-    ap.balance = unpaidBills(state.bills ?? []).reduce((s, b) => s + b.balance, 0);
+    const billAp = unpaidBills(state.bills ?? []).reduce((s, b) => s + b.balance, 0);
+    const creditAp = openVendorCredits.reduce((s, c) => s + c.balance, 0);
+    ap.balance = Math.round((billAp - creditAp) * 100) / 100;
   }
 
   const undeposited = accounts.find((a) => a.id === 'acc_undeposited');
@@ -425,7 +436,11 @@ export function refreshBalances(state: BooksState): BooksState {
       .filter((i) => i.status !== 'draft' && i.status !== 'void')
       .reduce((s, i) => s + i.tax, 0);
     const rcptTax = (state.salesReceipts ?? []).reduce((s, r) => s + r.tax, 0);
-    taxPayable.balance = Math.round((invTax + rcptTax) * 100) / 100;
+    const creditTax = (state.creditMemos ?? [])
+      .filter((c) => c.status !== 'void')
+      .reduce((s, c) => s + c.tax, 0);
+    const filed = (state.salesTaxPayments ?? []).reduce((s, p) => s + p.amount, 0);
+    taxPayable.balance = Math.round((invTax + rcptTax - creditTax - filed) * 100) / 100;
   }
 
   const cogsAcct = accounts.find((a) => a.id === 'acc_cogs');
@@ -434,23 +449,70 @@ export function refreshBalances(state: BooksState): BooksState {
     cogsAcct.balance = profitAndLoss(state, `${year}-01-01`, `${year}-12-31`).cogs;
   }
 
-  const customers = state.customers.map((c) => ({
-    ...c,
-    balance: unpaidInvoices(state.invoices)
+  // Apply posted journal lines to derived accounts after document-based overwrite.
+  const derivedIds = new Set(
+    accounts
+      .filter(
+        (a) =>
+          a.type === 'accounts_receivable' ||
+          a.type === 'accounts_payable' ||
+          a.id === 'acc_sales_tax' ||
+          a.id === 'acc_inventory' ||
+          a.id === 'acc_cogs',
+      )
+      .map((a) => a.id),
+  );
+  const debitNormal = new Set([
+    'bank',
+    'accounts_receivable',
+    'other_current_asset',
+    'fixed_asset',
+    'cogs',
+    'expense',
+    'other_expense',
+  ]);
+  for (const je of state.journalEntries ?? []) {
+    if (je.status !== 'posted') continue;
+    for (const line of je.lines) {
+      if (!derivedIds.has(line.accountId)) continue;
+      const acct = accounts.find((a) => a.id === line.accountId);
+      if (!acct) continue;
+      const delta = debitNormal.has(acct.type)
+        ? line.debit - line.credit
+        : line.credit - line.debit;
+      acct.balance = Math.round((acct.balance + delta) * 100) / 100;
+    }
+  }
+
+  const customers = state.customers.map((c) => {
+    const openInv = unpaidInvoices(state.invoices)
       .filter((i) => i.customerId === c.id)
-      .reduce((s, i) => s + i.balance, 0),
-  }));
+      .reduce((s, i) => s + i.balance, 0);
+    const credits = openCredits
+      .filter((m) => m.customerId === c.id)
+      .reduce((s, m) => s + m.balance, 0);
+    return {
+      ...c,
+      balance: Math.round((openInv - credits) * 100) / 100,
+    };
+  });
 
   const vendors = state.vendors.map((v) => {
     const unpaidExpenses = state.expenses.filter(
       (e) => e.payeeId === v.id && e.status === 'pending',
     );
     const openBills = unpaidBills(state.bills ?? []).filter((b) => b.vendorId === v.id);
+    const credits = openVendorCredits
+      .filter((m) => m.vendorId === v.id)
+      .reduce((s, m) => s + m.balance, 0);
     return {
       ...v,
-      balance:
-        unpaidExpenses.reduce((s, e) => s + e.amount, 0) +
-        openBills.reduce((s, b) => s + b.balance, 0),
+      balance: Math.round(
+        (unpaidExpenses.reduce((s, e) => s + e.amount, 0) +
+          openBills.reduce((s, b) => s + b.balance, 0) -
+          credits) *
+          100,
+      ) / 100,
     };
   });
 
@@ -470,6 +532,11 @@ export function refreshBalances(state: BooksState): BooksState {
     fundTransfers: state.fundTransfers ?? [],
     bankDeposits: state.bankDeposits ?? [],
     reconciliations: state.reconciliations ?? [],
+    journalEntries: state.journalEntries ?? [],
+    creditMemos: state.creditMemos ?? [],
+    refundReceipts: state.refundReceipts ?? [],
+    vendorCredits: state.vendorCredits ?? [],
+    salesTaxPayments: state.salesTaxPayments ?? [],
     accounts,
     customers,
     vendors,

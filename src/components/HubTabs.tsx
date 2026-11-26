@@ -24,6 +24,9 @@ export const salesHubTabs: HubTab[] = [
   { to: '/sales', label: 'Overview', end: true },
   { to: '/invoices', label: 'Invoices' },
   { to: '/quotes', label: 'Estimates' },
+  { to: '/sales-receipts', label: 'Sales receipts' },
+  { to: '/credit-memos', label: 'Credit memos' },
+  { to: '/refunds', label: 'Refunds' },
   { to: '/customers', label: 'Customers' },
   { to: '/products', label: 'Products & services' },
 ];
@@ -33,6 +36,7 @@ export const expensesHubTabs: HubTab[] = [
   { to: '/expenses', label: 'Expenses', end: true },
   { to: '/vendors', label: 'Vendors' },
   { to: '/bills', label: 'Bills' },
+  { to: '/vendor-credits', label: 'Vendor credits' },
   { to: '/purchase-orders', label: 'Purchase orders' },
   { to: '/inventory', label: 'Inventory' },
 ];
@@ -47,5 +51,6 @@ export const bankingHubTabs: HubTab[] = [
 
 export const accountingHubTabs: HubTab[] = [
   { to: '/accounts', label: 'Chart of accounts', end: true },
+  { to: '/journals', label: 'Journal entries' },
   { to: '/reconcile', label: 'Reconcile' },
 ];
