@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { profitAndLoss, unpaidInvoices } from '../lib/accounting';
+import { monthlyIncomeSeries, profitAndLoss, unpaidInvoices } from '../lib/accounting';
 import { inventoryMatrix } from '../lib/inventory';
 import { money, shortDate } from '../lib/format';
 import { QuickOrder } from '../components/QuickOrder';
@@ -20,9 +20,13 @@ export function Dashboard() {
     (r) => r.product.reorderPoint != null && r.total <= r.product.reorderPoint,
   );
 
-  const months = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
-  const incomeSeries = [8200, 9100, 7600, 11200, 10476, pl.income > 0 ? Math.min(pl.income, 14000) : 9800];
-  const maxIncome = Math.max(...incomeSeries);
+  const yearSeries = monthlyIncomeSeries(state, 2026);
+  const chartMonths = yearSeries.slice(5, 11);
+  const months = chartMonths.map((m) =>
+    new Date(2026, m.month - 1, 1).toLocaleString('en-US', { month: 'short' }),
+  );
+  const incomeSeries = chartMonths.map((m) => m.income);
+  const maxIncome = Math.max(1, ...incomeSeries);
 
   const catTotal = pl.byCategory.reduce((s, c) => s + c.amount, 0) || 1;
   const topCats = pl.byCategory.slice(0, 4);
@@ -59,14 +63,16 @@ export function Dashboard() {
           <div className="stat-hint">YTD net income</div>
         </div>
         <div className="panel stat">
-          <div className="stat-label">Income</div>
-          <div className="stat-value">{money(pl.income)}</div>
-          <div className="stat-hint">Payments collected this year</div>
+          <div className="stat-label">Gross profit</div>
+          <div className="stat-value">{money(pl.grossProfit)}</div>
+          <div className="stat-hint">
+            Sales {money(pl.income)} − COGS {money(pl.cogs)}
+          </div>
         </div>
         <div className="panel stat">
           <div className="stat-label">Expenses</div>
           <div className="stat-value">{money(pl.expenses)}</div>
-          <div className="stat-hint">Paid expenses this year</div>
+          <div className="stat-hint">Paid operating expenses YTD</div>
         </div>
         <div className={`panel stat ${overdue.length ? 'warning' : ''}`}>
           <div className="stat-label">Open invoices</div>

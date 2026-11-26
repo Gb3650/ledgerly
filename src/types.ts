@@ -1,6 +1,7 @@
 export type InvoiceStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'void';
 export type ExpenseStatus = 'unbilled' | 'paid' | 'pending';
 export type PoStatus = 'draft' | 'sent' | 'partial' | 'received' | 'cancelled';
+export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'converted' | 'declined';
 export type AccountType =
   | 'bank'
   | 'accounts_receivable'
@@ -17,6 +18,16 @@ export type AccountType =
   | 'other_expense';
 
 export type TxnType = 'deposit' | 'expense' | 'transfer' | 'payment' | 'sales_receipt';
+
+export type StockMovementReason =
+  | 'po_receive'
+  | 'invoice_fulfill'
+  | 'invoice_void'
+  | 'sales_receipt'
+  | 'transfer_out'
+  | 'transfer_in'
+  | 'adjustment'
+  | 'opening';
 
 export interface Company {
   name: string;
@@ -59,6 +70,19 @@ export interface StockTransfer {
   createdAt: string;
 }
 
+export interface StockMovement {
+  id: string;
+  date: string;
+  productId: string;
+  locationId: string;
+  qtyDelta: number;
+  reason: StockMovementReason;
+  refType?: string;
+  refId?: string;
+  memo: string;
+  createdAt: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -97,6 +121,7 @@ export interface Product {
   /** Total across all locations (derived when refreshing). */
   qtyOnHand: number;
   reorderPoint?: number;
+  isActive?: boolean;
 }
 
 export interface Account {
@@ -135,6 +160,40 @@ export interface Invoice {
   balance: number;
   createdAt: string;
   emailedAt?: string;
+  quoteId?: string;
+}
+
+export interface Quote {
+  id: string;
+  number: string;
+  customerId: string;
+  locationId?: string;
+  date: string;
+  expiryDate: string;
+  status: QuoteStatus;
+  lines: InvoiceLine[];
+  message: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  createdAt: string;
+  invoiceId?: string;
+}
+
+export interface SalesReceipt {
+  id: string;
+  number: string;
+  customerId?: string;
+  customerName: string;
+  locationId: string;
+  date: string;
+  paymentMethod: string;
+  lines: InvoiceLine[];
+  memo: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  createdAt: string;
 }
 
 export interface Payment {
@@ -205,15 +264,20 @@ export interface BooksState {
   locations: Location[];
   stock: StockLevel[];
   stockTransfers: StockTransfer[];
+  stockMovements: StockMovement[];
   customers: Customer[];
   vendors: Vendor[];
   products: Product[];
   accounts: Account[];
   invoices: Invoice[];
+  quotes: Quote[];
+  salesReceipts: SalesReceipt[];
   payments: Payment[];
   expenses: Expense[];
   purchaseOrders: PurchaseOrder[];
   transactions: BankTransaction[];
   nextInvoiceNumber: number;
   nextPoNumber: number;
+  nextQuoteNumber: number;
+  nextReceiptNumber: number;
 }

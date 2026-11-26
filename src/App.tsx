@@ -10,8 +10,10 @@ import { Inventory } from './pages/Inventory';
 import { Invoices } from './pages/Invoices';
 import { Products } from './pages/Products';
 import { PurchaseOrders } from './pages/PurchaseOrders';
+import { Quotes } from './pages/Quotes';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
+import { SalesReceipts } from './pages/SalesReceipts';
 import { Settings } from './pages/Settings';
 import { VendorDetail } from './pages/VendorDetail';
 import { Vendors } from './pages/Vendors';
@@ -27,6 +29,8 @@ export default function App() {
             <Route path="banking" element={<Banking />} />
             <Route path="sales" element={<Sales />} />
             <Route path="invoices" element={<Invoices />} />
+            <Route path="quotes" element={<Quotes />} />
+            <Route path="sales-receipts" element={<SalesReceipts />} />
             <Route path="customers" element={<Customers />} />
             <Route path="customers/:id" element={<CustomerDetail />} />
             <Route path="products" element={<Products />} />

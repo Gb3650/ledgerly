@@ -5,11 +5,23 @@ import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 
 export function Inventory() {
-  const { state, addLocation, transferStock } = useBooks();
+  const { state, addLocation, transferStock, adjustInventory } = useBooks();
   const locations = state.locations.filter((l) => l.isActive);
   const rows = useMemo(() => inventoryMatrix(state), [state]);
+  const movements = useMemo(
+    () => [...(state.stockMovements ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 40),
+    [state.stockMovements],
+  );
 
   const [locOpen, setLocOpen] = useState(false);
+  const [adjOpen, setAdjOpen] = useState(false);
+  const [adjLoc, setAdjLoc] = useState(locations[0]?.id ?? '');
+  const [adjProduct, setAdjProduct] = useState(
+    state.products.find((p) => p.type === 'inventory')?.id ?? '',
+  );
+  const [adjDelta, setAdjDelta] = useState(1);
+  const [adjMemo, setAdjMemo] = useState('Cycle count');
+  const [adjError, setAdjError] = useState('');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [address, setAddress] = useState('');
@@ -72,9 +84,18 @@ export function Inventory() {
           <h1>Inventory by location</h1>
           <p>Stock levels across ABC LLC physical sites — transfer or receive via POs.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost" onClick={() => setLocOpen(true)}>
             Add location
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setAdjError('');
+              setAdjOpen(true);
+            }}
+          >
+            Adjust qty
           </button>
           <button className="btn btn-primary" onClick={() => setXferOpen(true)}>
             Transfer stock
@@ -155,7 +176,7 @@ export function Inventory() {
 
       <div className="panel">
         <div className="panel-head">
-          <h2>Recent transfers</h2>
+          <h2>Stock movement</h2>
         </div>
         <div className="table-wrap">
           <table className="data">
@@ -163,32 +184,38 @@ export function Inventory() {
               <tr>
                 <th>Date</th>
                 <th>Product</th>
-                <th>From</th>
-                <th>To</th>
-                <th className="num">Qty</th>
+                <th>Location</th>
+                <th>Reason</th>
+                <th className="num">Qty Δ</th>
                 <th>Memo</th>
               </tr>
             </thead>
             <tbody>
-              {state.stockTransfers.slice(0, 20).map((t) => {
-                const product = state.products.find((p) => p.id === t.productId);
-                const from = state.locations.find((l) => l.id === t.fromLocationId);
-                const to = state.locations.find((l) => l.id === t.toLocationId);
+              {movements.map((m) => {
+                const product = state.products.find((p) => p.id === m.productId);
+                const loc = state.locations.find((l) => l.id === m.locationId);
                 return (
-                  <tr key={t.id}>
-                    <td>{shortDate(t.date)}</td>
+                  <tr key={m.id}>
+                    <td>{shortDate(m.date)}</td>
                     <td>{product?.name}</td>
-                    <td>{from?.code}</td>
-                    <td>{to?.code}</td>
-                    <td className="num">{t.qty}</td>
-                    <td>{t.memo || '—'}</td>
+                    <td>{loc?.code}</td>
+                    <td style={{ textTransform: 'capitalize' }}>
+                      {m.reason.replace(/_/g, ' ')}
+                    </td>
+                    <td
+                      className="num"
+                      style={{ color: m.qtyDelta < 0 ? 'var(--coral)' : 'var(--sea)' }}
+                    >
+                      {m.qtyDelta > 0 ? `+${m.qtyDelta}` : m.qtyDelta}
+                    </td>
+                    <td>{m.memo || '—'}</td>
                   </tr>
                 );
               })}
-              {state.stockTransfers.length === 0 ? (
+              {movements.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="empty">
-                    No transfers yet.
+                    No stock movements yet.
                   </td>
                 </tr>
               ) : null}
@@ -196,6 +223,85 @@ export function Inventory() {
           </table>
         </div>
       </div>
+
+      {adjOpen ? (
+        <Modal
+          title="Adjust inventory"
+          onClose={() => setAdjOpen(false)}
+          footer={
+            <>
+              <button className="btn btn-ghost" onClick={() => setAdjOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const ok = adjustInventory({
+                    locationId: adjLoc,
+                    productId: adjProduct,
+                    qtyDelta: adjDelta,
+                    memo: adjMemo,
+                  });
+                  if (!ok) {
+                    setAdjError('Adjustment failed — check qty available for decreases.');
+                    return;
+                  }
+                  setAdjOpen(false);
+                }}
+                disabled={!adjDelta}
+              >
+                Apply adjustment
+              </button>
+            </>
+          }
+        >
+          {adjError ? (
+            <div style={{ color: 'var(--coral)', marginBottom: 12, fontWeight: 600 }}>
+              {adjError}
+            </div>
+          ) : null}
+          <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+            Use positive qty to add stock (receiving / count up), negative to remove (shrink /
+            count down).
+          </p>
+          <div className="form-grid two">
+            <div className="field">
+              <label>Location</label>
+              <select value={adjLoc} onChange={(e) => setAdjLoc(e.target.value)}>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Product</label>
+              <select value={adjProduct} onChange={(e) => setAdjProduct(e.target.value)}>
+                {state.products
+                  .filter((p) => p.type === 'inventory')
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Qty change</label>
+              <input
+                type="number"
+                value={adjDelta}
+                onChange={(e) => setAdjDelta(Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label>Memo</label>
+              <input value={adjMemo} onChange={(e) => setAdjMemo(e.target.value)} />
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {locOpen ? (
         <Modal

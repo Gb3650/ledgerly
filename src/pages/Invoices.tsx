@@ -11,7 +11,7 @@ import type { Invoice } from '../types';
 type LineDraft = { productId: string; description: string; qty: number; rate: number };
 
 export function Invoices() {
-  const { state, saveInvoice, receivePayment, markInvoiceEmailed } = useBooks();
+  const { state, saveInvoice, receivePayment, markInvoiceEmailed, voidInvoice } = useBooks();
   const [params, setParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
@@ -115,9 +115,9 @@ export function Invoices() {
   const totals = invoiceTotals(lines);
   const canSave = customerId && lines.some((l) => l.description && l.qty > 0);
 
-  function onSave(asDraft = false) {
+  function onSave(asDraft = false, allowOversell = false) {
     if (!canSave) return;
-    saveInvoice({
+    const res = saveInvoice({
       id: editing?.id,
       customerId,
       locationId,
@@ -126,7 +126,21 @@ export function Invoices() {
       status: asDraft ? 'draft' : status === 'draft' ? 'sent' : status,
       message,
       lines: lines.filter((l) => l.description),
+      allowOversell,
     });
+    if (!res.ok && res.shortages?.length) {
+      const names = res.shortages
+        .map((s) => {
+          const p = state.products.find((x) => x.id === s.productId);
+          return `${p?.name ?? s.productId}: need ${s.need}, have ${s.have}`;
+        })
+        .join('\n');
+      const force = window.confirm(
+        `Not enough stock at this location:\n${names}\n\nSave anyway (oversell)?`,
+      );
+      if (force) onSave(asDraft, true);
+      return;
+    }
     setOpen(false);
   }
 
@@ -276,6 +290,19 @@ export function Invoices() {
               <button className="btn btn-ghost" onClick={() => setOpen(false)}>
                 Cancel
               </button>
+              {editing && editing.status !== 'void' && editing.status !== 'paid' ? (
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    if (window.confirm(`Void invoice #${editing.number}? Stock will be restored.`)) {
+                      voidInvoice(editing.id);
+                      setOpen(false);
+                    }
+                  }}
+                >
+                  Void
+                </button>
+              ) : null}
               <button className="btn btn-ghost" onClick={() => onSave(true)} disabled={!canSave}>
                 Save draft
               </button>
