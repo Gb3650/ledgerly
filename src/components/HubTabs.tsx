@@ -19,14 +19,13 @@ export function HubTabs({ tabs }: { tabs: HubTab[] }) {
   );
 }
 
+/** QBO Sales hub: Overview / Invoices / Estimates / Customers / Products & services */
 export const salesHubTabs: HubTab[] = [
   { to: '/sales', label: 'Overview', end: true },
   { to: '/invoices', label: 'Invoices' },
   { to: '/quotes', label: 'Estimates' },
-  { to: '/sales-receipts', label: 'Sales receipts' },
   { to: '/customers', label: 'Customers' },
   { to: '/products', label: 'Products & services' },
-  { to: '/receive-payment', label: 'Receive payment' },
 ];
 
 /** QBO Expenses center: Expenses · Vendors · Bills · Purchase orders · Inventory */
