@@ -1147,3 +1147,282 @@ a.linkish:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* —— Business overview + Reports (page-scoped; leave shell alone) —— */
+
+.bo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.bo-span-2 {
+  grid-column: 1 / -1;
+}
+
+.bo-link {
+  color: var(--sea);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.bo-link:hover {
+  text-decoration: underline;
+}
+
+.bo-pl {
+  display: grid;
+  gap: 16px;
+}
+
+.bo-pl-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bo-pl-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+}
+
+.bo-pl-breakdown div {
+  display: grid;
+  gap: 2px;
+}
+
+.bo-pl-breakdown span {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bo-bars {
+  height: 140px;
+}
+
+.bo-bar-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.bo-fill-expense {
+  background: linear-gradient(180deg, #7aa8c4 0%, var(--sky) 100%) !important;
+  opacity: 0.85;
+}
+
+.bo-legend-inline {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.bo-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.bo-dot.income {
+  background: var(--sea);
+}
+
+.bo-dot.expense {
+  background: var(--sky);
+}
+
+.bo-expense-total {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.bo-widget-stat {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px 4px;
+}
+
+.bo-widget-stat .stat-value {
+  font-size: 1.45rem;
+  margin-top: 4px;
+}
+
+.bo-widget-stat .stat-value.warn {
+  color: var(--coral);
+}
+
+.rpt-search {
+  margin-bottom: 20px;
+  max-width: 420px;
+}
+
+.rpt-search input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  outline: none;
+}
+
+.rpt-search input:focus {
+  border-color: var(--sea);
+  box-shadow: 0 0 0 3px rgba(31, 111, 95, 0.15);
+}
+
+.rpt-groups {
+  display: grid;
+  gap: 22px;
+}
+
+.rpt-group h2 {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.rpt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.rpt-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.rpt-link {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+  transition: background 0.12s;
+}
+
+.rpt-link:hover {
+  background: #f7fbf9;
+}
+
+.rpt-link-title {
+  font-weight: 700;
+  color: var(--sea-deep);
+}
+
+.rpt-link-blurb {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.rpt-back {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--sea);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.rpt-back:hover {
+  text-decoration: underline;
+}
+
+.rpt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.rpt-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rpt-dates label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.rpt-dates input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.rpt-seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rpt-seg button {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.rpt-seg button.active {
+  background: var(--sea-soft);
+  color: var(--sea-deep);
+}
+
+.rpt-net {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 2px solid var(--ink);
+  font-family: var(--display);
+  font-size: 1.25rem;
+}
+
+.rpt-footnote {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.rpt-total-row td {
+  font-weight: 700;
+  border-top: 1px solid var(--line-strong);
+  background: #f7fbf9;
+}
+
+@media (max-width: 900px) {
+  .bo-grid {
+    grid-template-columns: 1fr;
+  }
+  .bo-span-2 {
+    grid-column: auto;
+  }
+}

@@ -290,42 +290,85 @@ export function balanceSheet(state: BooksState) {
   };
 }
 
+export type AgingBucket = 'current' | 'd30' | 'd60' | 'd90';
+
+export type AgingSummaryRow = {
+  id: string;
+  name: string;
+  current: number;
+  d30: number;
+  d60: number;
+  d90: number;
+  total: number;
+};
+
+function agingBucketForDays(days: number): AgingBucket {
+  if (days <= 0) return 'current';
+  if (days <= 30) return 'd30';
+  if (days <= 60) return 'd60';
+  return 'd90';
+}
+
+function emptyAgingBuckets() {
+  return { current: 0, d30: 0, d60: 0, d90: 0 };
+}
+
+/** QBO-style A/R Aging: totals + detail rows + customer summary. */
 export function arAging(invoices: Invoice[], customers: BooksState['customers']) {
   const open = unpaidInvoices(invoices);
-  const buckets = { current: 0, d30: 0, d60: 0, d90: 0 };
+  const buckets = emptyAgingBuckets();
   const today = new Date();
+  const byCustomer = new Map<string, AgingSummaryRow>();
+
   const rows = open.map((inv) => {
     const due = new Date(inv.dueDate + 'T12:00:00');
     const days = Math.floor((today.getTime() - due.getTime()) / 86400000);
-    let bucket: keyof typeof buckets = 'current';
-    if (days <= 0) bucket = 'current';
-    else if (days <= 30) bucket = 'd30';
-    else if (days <= 60) bucket = 'd60';
-    else bucket = 'd90';
+    const bucket = agingBucketForDays(days);
     buckets[bucket] += inv.balance;
     const customer = customers.find((c) => c.id === inv.customerId);
-    return { invoice: inv, customerName: customer?.name ?? 'Unknown', days, bucket };
+    const customerName = customer?.name ?? 'Unknown';
+    const key = inv.customerId || customerName;
+    const summary =
+      byCustomer.get(key) ??
+      ({ id: key, name: customerName, ...emptyAgingBuckets(), total: 0 } satisfies AgingSummaryRow);
+    summary[bucket] += inv.balance;
+    summary.total += inv.balance;
+    byCustomer.set(key, summary);
+    return { invoice: inv, customerName, days, bucket };
   });
-  return { buckets, rows };
+
+  const summary = [...byCustomer.values()].sort((a, b) => b.total - a.total);
+  const total = Math.round(summary.reduce((s, r) => s + r.total, 0) * 100) / 100;
+  return { buckets, rows, summary, total };
 }
 
+/** QBO-style A/P Aging: totals + detail rows + vendor summary. */
 export function apAging(bills: Bill[], vendors: BooksState['vendors']) {
   const open = unpaidBills(bills);
-  const buckets = { current: 0, d30: 0, d60: 0, d90: 0 };
+  const buckets = emptyAgingBuckets();
   const today = new Date();
+  const byVendor = new Map<string, AgingSummaryRow>();
+
   const rows = open.map((bill) => {
     const due = new Date(bill.dueDate + 'T12:00:00');
     const days = Math.floor((today.getTime() - due.getTime()) / 86400000);
-    let bucket: keyof typeof buckets = 'current';
-    if (days <= 0) bucket = 'current';
-    else if (days <= 30) bucket = 'd30';
-    else if (days <= 60) bucket = 'd60';
-    else bucket = 'd90';
+    const bucket = agingBucketForDays(days);
     buckets[bucket] += bill.balance;
     const vendor = vendors.find((v) => v.id === bill.vendorId);
-    return { bill, vendorName: vendor?.name ?? 'Unknown', days, bucket };
+    const vendorName = vendor?.name ?? 'Unknown';
+    const key = bill.vendorId || vendorName;
+    const summary =
+      byVendor.get(key) ??
+      ({ id: key, name: vendorName, ...emptyAgingBuckets(), total: 0 } satisfies AgingSummaryRow);
+    summary[bucket] += bill.balance;
+    summary.total += bill.balance;
+    byVendor.set(key, summary);
+    return { bill, vendorName, days, bucket };
   });
-  return { buckets, rows };
+
+  const summary = [...byVendor.values()].sort((a, b) => b.total - a.total);
+  const total = Math.round(summary.reduce((s, r) => s + r.total, 0) * 100) / 100;
+  return { buckets, rows, summary, total };
 }
 
 export function refreshBalances(state: BooksState): BooksState {
