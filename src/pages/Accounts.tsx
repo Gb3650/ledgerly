@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { HubTabs, accountingHubTabs } from '../components/HubTabs';
 import { accountTypeLabel, money } from '../lib/format';
 import { useBooks } from '../store/BooksContext';
 import type { AccountType } from '../types';
@@ -30,6 +31,7 @@ export function Accounts() {
 
   return (
     <div>
+      <HubTabs tabs={accountingHubTabs} />
       <div className="page-header">
         <div>
           <h1>Chart of accounts</h1>
