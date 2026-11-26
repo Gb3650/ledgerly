@@ -215,20 +215,25 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     // Invalidate any in-flight cloud hydrate so it cannot overwrite this reset.
     cloudLoadId.current += 1;
     const seed = normalize(createSeed());
+    // Hold skipCloud until the seed is written so a late hydrate / remount
+    // cannot race ahead of the cloud PUT.
     skipCloud.current = true;
     setState(seed);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+      localStorage.setItem(`${STORAGE_KEY}.resetAt`, new Date().toISOString());
     } catch {
       /* ignore quota */
     }
     hydrated.current = true;
-    skipCloud.current = false;
     setSyncStatus('syncing');
-    // Persist seed to Postgres immediately so the next reload stays reset.
-    void saveCloudBooks(seed).then((ok) => {
-      setSyncStatus(ok ? 'cloud' : 'local');
-    });
+    void saveCloudBooks(seed)
+      .then((ok) => {
+        setSyncStatus(ok ? 'cloud' : 'local');
+      })
+      .finally(() => {
+        skipCloud.current = false;
+      });
   }, []);
 
   const updateCompany = useCallback(

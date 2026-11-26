@@ -19,6 +19,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import { Modal } from './Modal';
 import { useBooks } from '../store/BooksContext';
 
 /** QBO-style left navigation */
@@ -88,20 +89,16 @@ export function Layout() {
   const [navOpen, setNavOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [resetFlash, setResetFlash] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  function onResetStarter() {
-    if (
-      !window.confirm(
-        'Reset to ABC LLC starter books? This replaces invoices, inventory, and other data in this browser (and cloud sync when available).',
-      )
-    ) {
-      return;
-    }
+  function confirmReset() {
     resetSampleData();
+    setResetOpen(false);
     setResetFlash(true);
-    window.setTimeout(() => setResetFlash(false), 2500);
+    navigate('/');
+    window.setTimeout(() => setResetFlash(false), 3500);
   }
 
   useEffect(() => {
@@ -256,12 +253,39 @@ export function Layout() {
               </>
             )}
           </span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onResetStarter}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setResetOpen(true)}
+          >
             Reset starter data
           </button>
         </div>
         <Outlet />
       </main>
+
+      {resetOpen ? (
+        <Modal
+          title="Reset starter data?"
+          onClose={() => setResetOpen(false)}
+          footer={
+            <>
+              <button type="button" className="btn btn-ghost" onClick={() => setResetOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmReset}>
+                Reset to sample books
+              </button>
+            </>
+          }
+        >
+          <p style={{ marginTop: 0, lineHeight: 1.6 }}>
+            This replaces invoices, inventory, POs, and other books with the ABC LLC starter set.
+            It updates this browser and cloud sync when available. Download a backup in Settings
+            first if you want to keep current data.
+          </p>
+        </Modal>
+      ) : null}
     </div>
   );
 }
