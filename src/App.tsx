@@ -11,6 +11,8 @@ import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
 import { Inventory } from './pages/Inventory';
+import { JournalEntries } from './pages/JournalEntries';
+import { CreditMemos } from './pages/CreditMemos';
 import { Invoices } from './pages/Invoices';
 import { PayBills } from './pages/PayBills';
 import { Products } from './pages/Products';
@@ -19,6 +21,7 @@ import { Quotes } from './pages/Quotes';
 import { ReceivePayment } from './pages/ReceivePayment';
 import { Reconcile } from './pages/Reconcile';
 import { Recurring } from './pages/Recurring';
+import { RefundReceipts } from './pages/RefundReceipts';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { SalesAll } from './pages/SalesAll';
@@ -27,6 +30,7 @@ import { Settings } from './pages/Settings';
 import { Taxes } from './pages/Taxes';
 import { Transfer } from './pages/Transfer';
 import { VendorDetail } from './pages/VendorDetail';
+import { VendorCredits } from './pages/VendorCredits';
 import { Vendors } from './pages/Vendors';
 import { BooksProvider } from './store/BooksContext';
 
@@ -47,6 +51,8 @@ export default function App() {
             <Route path="invoices" element={<Invoices />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="sales-receipts" element={<SalesReceipts />} />
+            <Route path="credit-memos" element={<CreditMemos />} />
+            <Route path="refunds" element={<RefundReceipts />} />
             <Route path="receive-payment" element={<ReceivePayment />} />
             <Route path="customers" element={<Customers />} />
             <Route path="customers/:id" element={<CustomerDetail />} />
@@ -55,12 +61,14 @@ export default function App() {
             <Route path="purchase-orders" element={<PurchaseOrders />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="bills" element={<Bills />} />
+            <Route path="vendor-credits" element={<VendorCredits />} />
             <Route path="pay-bills" element={<PayBills />} />
             <Route path="vendors" element={<Vendors />} />
             <Route path="vendors/:id" element={<VendorDetail />} />
             <Route path="reports" element={<Reports />} />
             <Route path="taxes" element={<Taxes />} />
             <Route path="accounts" element={<Accounts />} />
+            <Route path="journals" element={<JournalEntries />} />
             <Route path="apps" element={<Apps />} />
             <Route path="recurring" element={<Recurring />} />
             <Route path="settings" element={<Settings />} />

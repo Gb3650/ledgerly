@@ -297,6 +297,86 @@ export interface PurchaseOrder {
   createdAt: string;
 }
 
+
+export type CreditStatus = 'open' | 'partial' | 'closed' | 'void';
+export type JournalStatus = 'posted' | 'void';
+
+export interface JournalLine {
+  id: string;
+  accountId: string;
+  description: string;
+  debit: number;
+  credit: number;
+}
+
+export interface JournalEntry {
+  id: string;
+  number: string;
+  date: string;
+  memo: string;
+  status: JournalStatus;
+  lines: JournalLine[];
+  createdAt: string;
+}
+
+/** Customer credit memo — reduces A/R when posted; balance is unapplied. */
+export interface CreditMemo {
+  id: string;
+  number: string;
+  customerId: string;
+  date: string;
+  status: CreditStatus;
+  lines: InvoiceLine[];
+  message: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  balance: number;
+  createdAt: string;
+}
+
+/** Cash refund to a customer (optionally applied against a credit memo). */
+export interface RefundReceipt {
+  id: string;
+  number: string;
+  customerId: string;
+  paymentAccountId: string;
+  date: string;
+  amount: number;
+  memo: string;
+  creditMemoId?: string;
+  createdAt: string;
+}
+
+/** Vendor credit — reduces A/P when posted; balance is unapplied. */
+export interface VendorCredit {
+  id: string;
+  number: string;
+  vendorId: string;
+  date: string;
+  status: CreditStatus;
+  lines: BillLine[];
+  memo: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  balance: number;
+  createdAt: string;
+}
+
+/** Sales tax payment / filing against Sales Tax Payable. */
+export interface SalesTaxPayment {
+  id: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  agency: string;
+  paymentAccountId: string;
+  amount: number;
+  memo: string;
+  createdAt: string;
+}
+
 export interface BankTransaction {
   id: string;
   accountId: string;
@@ -389,6 +469,11 @@ export interface BooksState {
   bills: Bill[];
   billPayments: BillPayment[];
   purchaseOrders: PurchaseOrder[];
+  journalEntries: JournalEntry[];
+  creditMemos: CreditMemo[];
+  refundReceipts: RefundReceipt[];
+  vendorCredits: VendorCredit[];
+  salesTaxPayments: SalesTaxPayment[];
   transactions: BankTransaction[];
   checks: CheckTxn[];
   fundTransfers: FundTransfer[];
@@ -401,4 +486,8 @@ export interface BooksState {
   nextBillNumber: number;
   nextCheckNumber: number;
   nextDepositNumber: number;
+  nextJournalNumber: number;
+  nextCreditMemoNumber: number;
+  nextRefundNumber: number;
+  nextVendorCreditNumber: number;
 }

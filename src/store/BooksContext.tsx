@@ -31,17 +31,23 @@ import type {
   Bill,
   BillLine,
   BooksState,
+  CreditMemo,
   Customer,
   Expense,
   Invoice,
   InvoiceLine,
+  JournalEntry,
+  JournalLine,
   Location,
   PoLine,
   Product,
   PurchaseOrder,
   Quote,
+  RefundReceipt,
   SalesReceipt,
+  SalesTaxPayment,
   Vendor,
+  VendorCredit,
 } from '../types';
 
 interface BooksContextValue {
@@ -196,6 +202,54 @@ interface BooksContextValue {
     beginningBalance: number;
     clearedTxnIds: string[];
   }) => string | null;
+  saveJournalEntry: (input: {
+    id?: string;
+    date: string;
+    memo: string;
+    lines: Array<Omit<JournalLine, 'id'>>;
+  }) => string | null;
+  voidJournalEntry: (id: string) => void;
+  saveCreditMemo: (input: {
+    id?: string;
+    customerId: string;
+    date: string;
+    message: string;
+    lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+  }) => string;
+  voidCreditMemo: (id: string) => void;
+  applyCreditMemo: (input: {
+    creditMemoId: string;
+    allocations: Array<{ invoiceId: string; amount: number }>;
+  }) => void;
+  createRefundReceipt: (input: {
+    customerId: string;
+    paymentAccountId: string;
+    date: string;
+    amount: number;
+    memo: string;
+    creditMemoId?: string;
+  }) => string | null;
+  saveVendorCredit: (input: {
+    id?: string;
+    vendorId: string;
+    date: string;
+    memo: string;
+    lines: Array<Omit<BillLine, 'id' | 'amount'>>;
+  }) => string;
+  voidVendorCredit: (id: string) => void;
+  applyVendorCredit: (input: {
+    vendorCreditId: string;
+    allocations: Array<{ billId: string; amount: number }>;
+  }) => void;
+  recordSalesTaxPayment: (input: {
+    date: string;
+    periodFrom: string;
+    periodTo: string;
+    agency: string;
+    paymentAccountId: string;
+    amount: number;
+    memo: string;
+  }) => string | null;
 }
 
 const BooksContext = createContext<BooksContextValue | null>(null);
@@ -239,6 +293,15 @@ function normalize(raw: BooksState): BooksState {
     fundTransfers: raw.fundTransfers ?? [],
     bankDeposits: raw.bankDeposits ?? [],
     reconciliations: raw.reconciliations ?? [],
+    nextJournalNumber: raw.nextJournalNumber ?? 1001,
+    nextCreditMemoNumber: raw.nextCreditMemoNumber ?? 5001,
+    nextRefundNumber: raw.nextRefundNumber ?? 7001,
+    nextVendorCreditNumber: raw.nextVendorCreditNumber ?? 3001,
+    journalEntries: raw.journalEntries ?? [],
+    creditMemos: raw.creditMemos ?? [],
+    refundReceipts: raw.refundReceipts ?? [],
+    vendorCredits: raw.vendorCredits ?? [],
+    salesTaxPayments: raw.salesTaxPayments ?? [],
     invoices: markOverdue(raw.invoices ?? []),
   });
 }
@@ -251,6 +314,44 @@ function loadState(): BooksState {
     /* ignore */
   }
   return normalize(createSeed());
+}
+
+
+const DERIVED_ACCOUNT_TYPES = new Set<AccountType>([
+  'accounts_receivable',
+  'accounts_payable',
+]);
+const DERIVED_ACCOUNT_IDS = new Set(['acc_sales_tax', 'acc_inventory', 'acc_cogs']);
+const DEBIT_NORMAL = new Set<AccountType>([
+  'bank',
+  'accounts_receivable',
+  'other_current_asset',
+  'fixed_asset',
+  'cogs',
+  'expense',
+  'other_expense',
+]);
+
+function isDerivedAccount(a: Account) {
+  return DERIVED_ACCOUNT_TYPES.has(a.type) || DERIVED_ACCOUNT_IDS.has(a.id);
+}
+
+function journalDelta(account: Account, debit: number, credit: number) {
+  return DEBIT_NORMAL.has(account.type) ? debit - credit : credit - debit;
+}
+
+function applyJournalLinesToAccounts(
+  accounts: Account[],
+  lines: Array<{ accountId: string; debit: number; credit: number }>,
+  sign: 1 | -1,
+) {
+  return accounts.map((a) => {
+    if (isDerivedAccount(a)) return a;
+    const hits = lines.filter((l) => l.accountId === a.id);
+    if (!hits.length) return a;
+    const delta = hits.reduce((s, l) => s + journalDelta(a, l.debit, l.credit), 0) * sign;
+    return { ...a, balance: Math.round((a.balance + delta) * 100) / 100 };
+  });
 }
 
 export function BooksProvider({ children }: { children: ReactNode }) {
@@ -1658,6 +1759,422 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+
+  const saveJournalEntry = useCallback(
+    (input: {
+      id?: string;
+      date: string;
+      memo: string;
+      lines: Array<Omit<JournalLine, 'id'>>;
+    }) => {
+      const lines = input.lines.map((l) => ({
+        ...l,
+        id: uid('jl'),
+        debit: Math.max(0, Math.round((l.debit || 0) * 100) / 100),
+        credit: Math.max(0, Math.round((l.credit || 0) * 100) / 100),
+        description: l.description ?? '',
+      }));
+      const debits = lines.reduce((s, l) => s + l.debit, 0);
+      const credits = lines.reduce((s, l) => s + l.credit, 0);
+      if (lines.length < 2 || Math.round(debits * 100) !== Math.round(credits * 100) || debits <= 0) {
+        return null;
+      }
+      let newId = input.id ?? uid('je');
+      commit((prev) => {
+        const existing = input.id
+          ? (prev.journalEntries ?? []).find((j) => j.id === input.id)
+          : undefined;
+        if (existing?.status === 'void') return prev;
+        let accounts = prev.accounts;
+        if (existing) {
+          accounts = applyJournalLinesToAccounts(accounts, existing.lines, -1);
+        }
+        accounts = applyJournalLinesToAccounts(accounts, lines, 1);
+        const entry: JournalEntry = {
+          id: newId,
+          number: existing?.number ?? String(prev.nextJournalNumber ?? 1001),
+          date: input.date,
+          memo: input.memo,
+          status: 'posted',
+          lines,
+          createdAt: existing?.createdAt ?? todayISO(),
+        };
+        const list = prev.journalEntries ?? [];
+        return {
+          ...prev,
+          accounts,
+          journalEntries: existing
+            ? list.map((j) => (j.id === existing.id ? entry : j))
+            : [entry, ...list],
+          nextJournalNumber: existing
+            ? prev.nextJournalNumber
+            : (prev.nextJournalNumber ?? 1001) + 1,
+        };
+      });
+      return newId;
+    },
+    [commit],
+  );
+
+  const voidJournalEntry = useCallback(
+    (id: string) => {
+      commit((prev) => {
+        const existing = (prev.journalEntries ?? []).find((j) => j.id === id);
+        if (!existing || existing.status === 'void') return prev;
+        return {
+          ...prev,
+          accounts: applyJournalLinesToAccounts(prev.accounts, existing.lines, -1),
+          journalEntries: (prev.journalEntries ?? []).map((j) =>
+            j.id === id ? { ...j, status: 'void' as const } : j,
+          ),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const saveCreditMemo = useCallback(
+    (input: {
+      id?: string;
+      customerId: string;
+      date: string;
+      message: string;
+      lines: Omit<InvoiceLine, 'id' | 'amount'>[];
+    }) => {
+      let newId = input.id ?? uid('cm');
+      commit((prev) => {
+        const existing = input.id
+          ? (prev.creditMemos ?? []).find((c) => c.id === input.id)
+          : undefined;
+        if (existing && existing.status !== 'open' && existing.balance !== existing.total) {
+          return prev;
+        }
+        const lines: InvoiceLine[] = input.lines.map((l) => ({
+          ...l,
+          id: uid('cml'),
+          amount: Math.round(l.qty * l.rate * 100) / 100,
+        }));
+        const totals = invoiceTotals(lines);
+        const memo: CreditMemo = {
+          id: newId,
+          number: existing?.number ?? String(prev.nextCreditMemoNumber ?? 5001),
+          customerId: input.customerId,
+          date: input.date,
+          status: 'open',
+          lines,
+          message: input.message,
+          ...totals,
+          balance: totals.total,
+          createdAt: existing?.createdAt ?? todayISO(),
+        };
+        const list = prev.creditMemos ?? [];
+        return {
+          ...prev,
+          creditMemos: existing ? list.map((c) => (c.id === existing.id ? memo : c)) : [memo, ...list],
+          nextCreditMemoNumber: existing
+            ? prev.nextCreditMemoNumber
+            : (prev.nextCreditMemoNumber ?? 5001) + 1,
+        };
+      });
+      return newId;
+    },
+    [commit],
+  );
+
+  const voidCreditMemo = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        creditMemos: (prev.creditMemos ?? []).map((c) =>
+          c.id === id && c.balance === c.total ? { ...c, status: 'void' as const, balance: 0 } : c,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const applyCreditMemo = useCallback(
+    (input: {
+      creditMemoId: string;
+      allocations: Array<{ invoiceId: string; amount: number }>;
+    }) => {
+      commit((prev) => {
+        const credit = (prev.creditMemos ?? []).find((c) => c.id === input.creditMemoId);
+        if (!credit || credit.status === 'void' || credit.balance <= 0) return prev;
+        let remaining = credit.balance;
+        let invoices = prev.invoices;
+        for (const alloc of input.allocations) {
+          if (alloc.amount <= 0 || remaining <= 0) continue;
+          const inv = invoices.find((i) => i.id === alloc.invoiceId);
+          if (!inv || inv.customerId !== credit.customerId || inv.balance <= 0) continue;
+          const pay = Math.min(inv.balance, alloc.amount, remaining);
+          remaining = Math.round((remaining - pay) * 100) / 100;
+          const balance = Math.max(0, Math.round((inv.balance - pay) * 100) / 100);
+          invoices = invoices.map((i) =>
+            i.id === inv.id
+              ? {
+                  ...i,
+                  balance,
+                  status: balance === 0 ? 'paid' : 'partial',
+                }
+              : i,
+          );
+        }
+        const used = Math.round((credit.balance - remaining) * 100) / 100;
+        if (used <= 0) return prev;
+        return {
+          ...prev,
+          invoices,
+          creditMemos: (prev.creditMemos ?? []).map((c) =>
+            c.id === credit.id
+              ? {
+                  ...c,
+                  balance: remaining,
+                  status: remaining === 0 ? 'closed' : 'partial',
+                }
+              : c,
+          ),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const createRefundReceipt = useCallback(
+    (input: {
+      customerId: string;
+      paymentAccountId: string;
+      date: string;
+      amount: number;
+      memo: string;
+      creditMemoId?: string;
+    }) => {
+      const amount = Math.round(input.amount * 100) / 100;
+      if (amount <= 0 || !input.customerId || !input.paymentAccountId) return null;
+      let newId = uid('rf');
+      let ok = false;
+      commit((prev) => {
+        const bank = prev.accounts.find((a) => a.id === input.paymentAccountId);
+        if (!bank) return prev;
+        let creditMemos = prev.creditMemos ?? [];
+        if (input.creditMemoId) {
+          const cm = creditMemos.find((c) => c.id === input.creditMemoId);
+          if (!cm || cm.customerId !== input.customerId || cm.balance < amount) return prev;
+          creditMemos = creditMemos.map((c) => {
+            if (c.id !== cm.id) return c;
+            const balance = Math.round((c.balance - amount) * 100) / 100;
+            return {
+              ...c,
+              balance,
+              status: balance === 0 ? 'closed' : 'partial',
+            };
+          });
+        }
+        ok = true;
+        const customer = prev.customers.find((c) => c.id === input.customerId);
+        const refund: RefundReceipt = {
+          id: newId,
+          number: String(prev.nextRefundNumber ?? 7001),
+          customerId: input.customerId,
+          paymentAccountId: input.paymentAccountId,
+          date: input.date,
+          amount,
+          memo: input.memo,
+          creditMemoId: input.creditMemoId,
+          createdAt: todayISO(),
+        };
+        return {
+          ...prev,
+          creditMemos,
+          refundReceipts: [refund, ...(prev.refundReceipts ?? [])],
+          nextRefundNumber: (prev.nextRefundNumber ?? 7001) + 1,
+          accounts: prev.accounts.map((a) =>
+            a.id === input.paymentAccountId ? { ...a, balance: a.balance - amount } : a,
+          ),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: input.paymentAccountId,
+              date: input.date,
+              description: `Refund — ${customer?.name ?? 'Customer'}`,
+              amount: -amount,
+              type: 'payment' as const,
+              matched: true,
+              categoryAccountId: 'acc_ar',
+              payee: customer?.name,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+      return ok ? newId : null;
+    },
+    [commit],
+  );
+
+  const saveVendorCredit = useCallback(
+    (input: {
+      id?: string;
+      vendorId: string;
+      date: string;
+      memo: string;
+      lines: Array<Omit<BillLine, 'id' | 'amount'>>;
+    }) => {
+      let newId = input.id ?? uid('vc');
+      commit((prev) => {
+        const existing = input.id
+          ? (prev.vendorCredits ?? []).find((c) => c.id === input.id)
+          : undefined;
+        const lines: BillLine[] = input.lines.map((l) => ({
+          ...l,
+          id: uid('vcl'),
+          amount: Math.round(l.qty * l.rate * 100) / 100,
+        }));
+        const totals = billLineTotals(lines);
+        const credit: VendorCredit = {
+          id: newId,
+          number: existing?.number ?? String(prev.nextVendorCreditNumber ?? 3001),
+          vendorId: input.vendorId,
+          date: input.date,
+          status: 'open',
+          lines,
+          memo: input.memo,
+          ...totals,
+          balance: totals.total,
+          createdAt: existing?.createdAt ?? todayISO(),
+        };
+        const list = prev.vendorCredits ?? [];
+        return {
+          ...prev,
+          vendorCredits: existing
+            ? list.map((c) => (c.id === existing.id ? credit : c))
+            : [credit, ...list],
+          nextVendorCreditNumber: existing
+            ? prev.nextVendorCreditNumber
+            : (prev.nextVendorCreditNumber ?? 3001) + 1,
+        };
+      });
+      return newId;
+    },
+    [commit],
+  );
+
+  const voidVendorCredit = useCallback(
+    (id: string) => {
+      commit((prev) => ({
+        ...prev,
+        vendorCredits: (prev.vendorCredits ?? []).map((c) =>
+          c.id === id && c.balance === c.total ? { ...c, status: 'void' as const, balance: 0 } : c,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const applyVendorCredit = useCallback(
+    (input: {
+      vendorCreditId: string;
+      allocations: Array<{ billId: string; amount: number }>;
+    }) => {
+      commit((prev) => {
+        const credit = (prev.vendorCredits ?? []).find((c) => c.id === input.vendorCreditId);
+        if (!credit || credit.status === 'void' || credit.balance <= 0) return prev;
+        let remaining = credit.balance;
+        let bills = prev.bills ?? [];
+        for (const alloc of input.allocations) {
+          if (alloc.amount <= 0 || remaining <= 0) continue;
+          const bill = bills.find((b) => b.id === alloc.billId);
+          if (!bill || bill.vendorId !== credit.vendorId || bill.balance <= 0) continue;
+          const pay = Math.min(bill.balance, alloc.amount, remaining);
+          remaining = Math.round((remaining - pay) * 100) / 100;
+          const balance = Math.max(0, Math.round((bill.balance - pay) * 100) / 100);
+          bills = bills.map((b) =>
+            b.id === bill.id
+              ? {
+                  ...b,
+                  balance,
+                  status: balance === 0 ? 'paid' : 'partial',
+                }
+              : b,
+          );
+        }
+        const used = Math.round((credit.balance - remaining) * 100) / 100;
+        if (used <= 0) return prev;
+        return {
+          ...prev,
+          bills,
+          vendorCredits: (prev.vendorCredits ?? []).map((c) =>
+            c.id === credit.id
+              ? {
+                  ...c,
+                  balance: remaining,
+                  status: remaining === 0 ? 'closed' : 'partial',
+                }
+              : c,
+          ),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const recordSalesTaxPayment = useCallback(
+    (input: {
+      date: string;
+      periodFrom: string;
+      periodTo: string;
+      agency: string;
+      paymentAccountId: string;
+      amount: number;
+      memo: string;
+    }) => {
+      const amount = Math.round(input.amount * 100) / 100;
+      if (amount <= 0 || !input.paymentAccountId) return null;
+      let newId = uid('stp');
+      let ok = false;
+      commit((prev) => {
+        const bank = prev.accounts.find((a) => a.id === input.paymentAccountId);
+        if (!bank) return prev;
+        ok = true;
+        const payment: SalesTaxPayment = {
+          id: newId,
+          date: input.date,
+          periodFrom: input.periodFrom,
+          periodTo: input.periodTo,
+          agency: input.agency.trim() || 'State tax agency',
+          paymentAccountId: input.paymentAccountId,
+          amount,
+          memo: input.memo,
+          createdAt: todayISO(),
+        };
+        return {
+          ...prev,
+          salesTaxPayments: [payment, ...(prev.salesTaxPayments ?? [])],
+          accounts: prev.accounts.map((a) =>
+            a.id === input.paymentAccountId ? { ...a, balance: a.balance - amount } : a,
+          ),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: input.paymentAccountId,
+              date: input.date,
+              description: `Sales tax payment — ${payment.agency}`,
+              amount: -amount,
+              type: 'expense' as const,
+              matched: true,
+              categoryAccountId: 'acc_sales_tax',
+              payee: payment.agency,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+      return ok ? newId : null;
+    },
+    [commit],
+  );
+
+
   const matchTransaction = useCallback(
     (id: string, categoryAccountId: string) => {
       commit((prev) => ({
@@ -1724,6 +2241,16 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       transferFunds,
       createBankDeposit,
       completeReconciliation,
+      saveJournalEntry,
+      voidJournalEntry,
+      saveCreditMemo,
+      voidCreditMemo,
+      applyCreditMemo,
+      createRefundReceipt,
+      saveVendorCredit,
+      voidVendorCredit,
+      applyVendorCredit,
+      recordSalesTaxPayment,
     }),
     [
       state,
@@ -1768,6 +2295,16 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       transferFunds,
       createBankDeposit,
       completeReconciliation,
+      saveJournalEntry,
+      voidJournalEntry,
+      saveCreditMemo,
+      voidCreditMemo,
+      applyCreditMemo,
+      createRefundReceipt,
+      saveVendorCredit,
+      voidVendorCredit,
+      applyVendorCredit,
+      recordSalesTaxPayment,
     ],
   );
 

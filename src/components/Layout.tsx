@@ -46,6 +46,8 @@ const newMenu = [
       { to: '/receive-payment', label: 'Receive payment' },
       { to: '/quotes?new=1', label: 'Estimate' },
       { to: '/sales-receipts?new=1', label: 'Sales receipt' },
+      { to: '/credit-memos?new=1', label: 'Credit memo' },
+      { to: '/refunds?new=1', label: 'Refund receipt' },
       { to: '/customers?new=1', label: 'Customer' },
       { to: '/products', label: 'Product/service' },
     ],
@@ -57,6 +59,7 @@ const newMenu = [
       { to: '/checks?new=1', label: 'Check' },
       { to: '/bills?new=1', label: 'Bill' },
       { to: '/pay-bills', label: 'Pay bills' },
+      { to: '/vendor-credits?new=1', label: 'Vendor credit' },
       { to: '/purchase-orders?new=1', label: 'Purchase order' },
       { to: '/vendors?new=1', label: 'Vendor' },
     ],
@@ -64,11 +67,13 @@ const newMenu = [
   {
     label: 'OTHER',
     items: [
+      { to: '/journals?new=1', label: 'Journal entry' },
       { to: '/bank-deposit', label: 'Bank deposit' },
       { to: '/transfer', label: 'Transfer' },
       { to: '/reconcile', label: 'Reconcile' },
       { to: '/inventory', label: 'Inventory qty adjustment' },
       { to: '/accounts', label: 'Chart of accounts' },
+      { to: '/taxes', label: 'Sales tax payment' },
     ],
   },
 ];
