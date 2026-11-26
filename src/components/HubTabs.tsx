@@ -37,3 +37,11 @@ export const expensesHubTabs: HubTab[] = [
   { to: '/pay-bills', label: 'Pay bills' },
   { to: '/inventory', label: 'Inventory' },
 ];
+
+export const bankingHubTabs: HubTab[] = [
+  { to: '/banking', label: 'Bank transactions', end: true },
+  { to: '/checks', label: 'Checks' },
+  { to: '/bank-deposit', label: 'Bank deposit' },
+  { to: '/transfer', label: 'Transfer' },
+  { to: '/reconcile', label: 'Reconcile' },
+];

@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { undepositedFundsBalance } from '../lib/accounting';
 import { money, shortDate } from '../lib/format';
+import { HubTabs, bankingHubTabs } from '../components/HubTabs';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
 
@@ -9,7 +12,13 @@ export function Banking() {
   const [accountId, setAccountId] = useState(banks[0]?.id ?? '');
   const [filter, setFilter] = useState<'for_review' | 'categorized' | 'all'>('for_review');
   const expenseAccounts = state.accounts.filter(
-    (a) => a.type === 'expense' || a.type === 'cogs' || a.type === 'income' || a.type === 'accounts_receivable',
+    (a) =>
+      a.type === 'expense' ||
+      a.type === 'cogs' ||
+      a.type === 'income' ||
+      a.type === 'accounts_receivable' ||
+      a.type === 'other_current_asset' ||
+      a.type === 'other_income',
   );
 
   const txns = useMemo(() => {
@@ -24,14 +33,32 @@ export function Banking() {
   }, [state.transactions, accountId, filter]);
 
   const selected = banks.find((b) => b.id === accountId);
-  const forReviewCount = state.transactions.filter((t) => t.accountId === accountId && !t.matched).length;
+  const forReviewCount = state.transactions.filter(
+    (t) => t.accountId === accountId && !t.matched,
+  ).length;
+  const uf = undepositedFundsBalance(state);
 
   return (
     <div>
+      <HubTabs tabs={bankingHubTabs} />
       <div className="page-header">
         <div>
           <h1>Banking</h1>
           <p>Review downloaded transactions and keep your books in sync.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/checks?new=1">
+            Check
+          </Link>
+          <Link className="btn btn-ghost" to="/transfer">
+            Transfer
+          </Link>
+          <Link className="btn btn-ghost" to="/reconcile">
+            Reconcile
+          </Link>
+          <Link className="btn btn-primary" to="/bank-deposit">
+            Deposit{uf ? ` · ${money(uf)}` : ''}
+          </Link>
         </div>
       </div>
 
@@ -52,6 +79,15 @@ export function Banking() {
             <div className="bank-bal">{money(a.balance)}</div>
           </button>
         ))}
+        <Link
+          to="/bank-deposit"
+          className="panel bank-card"
+          style={{ textAlign: 'left', textDecoration: 'none' }}
+        >
+          <h3>Undeposited Funds</h3>
+          <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>Awaiting deposit</div>
+          <div className="bank-bal">{money(uf)}</div>
+        </Link>
       </div>
 
       <div className="panel">
@@ -96,7 +132,14 @@ export function Banking() {
               {txns.map((t) => (
                 <tr key={t.id}>
                   <td>{shortDate(t.date)}</td>
-                  <td style={{ fontWeight: 600 }}>{t.description}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    {t.description}
+                    {t.cleared ? (
+                      <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: '0.75rem' }}>
+                        · cleared
+                      </span>
+                    ) : null}
+                  </td>
                   <td>{t.payee ?? '—'}</td>
                   <td>
                     {t.matched ? (
@@ -124,7 +167,10 @@ export function Banking() {
                             </option>
                           ))}
                         </select>
-                        <button className="btn btn-ghost btn-sm" onClick={() => excludeTransaction(t.id)}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => excludeTransaction(t.id)}
+                        >
                           Exclude
                         </button>
                       </div>

@@ -76,6 +76,7 @@ const newMenu = [
     label: 'VENDORS',
     items: [
       { to: '/expenses?new=1', label: 'Expense' },
+      { to: '/checks?new=1', label: 'Check' },
       { to: '/bills?new=1', label: 'Bill' },
       { to: '/pay-bills', label: 'Pay bills' },
       { to: '/purchase-orders?new=1', label: 'Purchase order' },
@@ -85,10 +86,11 @@ const newMenu = [
   {
     label: 'OTHER',
     items: [
-      { to: '/banking', label: 'Bank deposit' },
+      { to: '/bank-deposit', label: 'Bank deposit' },
+      { to: '/transfer', label: 'Transfer' },
+      { to: '/reconcile', label: 'Reconcile' },
       { to: '/inventory', label: 'Inventory qty' },
       { to: '/accounts', label: 'Chart of accounts' },
-      { to: '/reports', label: 'Statement / report' },
     ],
   },
 ];

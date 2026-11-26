@@ -30,6 +30,31 @@ export function unpaidBills(bills: Bill[]): Bill[] {
   return (bills ?? []).filter((b) => openPayableStatuses(b.status) && b.balance > 0);
 }
 
+/** Customer payments waiting to be deposited (QBO Undeposited Funds). */
+export function undepositedPayments(state: BooksState) {
+  return (state.payments ?? []).filter((p) => !p.depositId);
+}
+
+export function undepositedFundsBalance(state: BooksState) {
+  return Math.round(undepositedPayments(state).reduce((s, p) => s + p.amount, 0) * 100) / 100;
+}
+
+export function reconcileBeginningBalance(
+  state: BooksState,
+  accountId: string,
+): number {
+  const account = state.accounts.find((a) => a.id === accountId);
+  if (!account) return 0;
+  const last = [...(state.reconciliations ?? [])]
+    .filter((r) => r.accountId === accountId && r.status === 'completed')
+    .sort((a, b) => b.statementEndingDate.localeCompare(a.statementEndingDate))[0];
+  if (last) return last.statementEndingBalance;
+  const uncleared = (state.transactions ?? [])
+    .filter((t) => t.accountId === accountId && !t.cleared)
+    .reduce((s, t) => s + t.amount, 0);
+  return Math.round((account.balance - uncleared) * 100) / 100;
+}
+
 export function billLineTotals(lines: { qty: number; rate: number }[], taxRate = 0) {
   const subtotal = Math.round(lines.reduce((s, l) => s + l.qty * l.rate, 0) * 100) / 100;
   const tax = Math.round(subtotal * taxRate * 100) / 100;
@@ -349,6 +374,11 @@ export function refreshBalances(state: BooksState): BooksState {
     ap.balance = unpaidBills(state.bills ?? []).reduce((s, b) => s + b.balance, 0);
   }
 
+  const undeposited = accounts.find((a) => a.id === 'acc_undeposited');
+  if (undeposited) {
+    undeposited.balance = undepositedFundsBalance(state);
+  }
+
   const taxPayable = accounts.find((a) => a.id === 'acc_sales_tax');
   if (taxPayable) {
     const invTax = (state.invoices ?? [])
@@ -396,6 +426,10 @@ export function refreshBalances(state: BooksState): BooksState {
     purchaseOrders: state.purchaseOrders ?? [],
     quotes: state.quotes ?? [],
     salesReceipts: state.salesReceipts ?? [],
+    checks: state.checks ?? [],
+    fundTransfers: state.fundTransfers ?? [],
+    bankDeposits: state.bankDeposits ?? [],
+    reconciliations: state.reconciliations ?? [],
     accounts,
     customers,
     vendors,

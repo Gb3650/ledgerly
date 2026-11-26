@@ -84,11 +84,13 @@ export function ReceivePayment() {
           <div className="stat-hint">Applied amount</div>
         </div>
         <div className="panel stat">
-          <div className="stat-label">Deposit to</div>
+          <div className="stat-label">Holds in</div>
           <div className="stat-value" style={{ fontSize: '1.25rem' }}>
-            Business Checking
+            Undeposited Funds
           </div>
-          <div className="stat-hint">Undeposited → bank (simplified)</div>
+          <div className="stat-hint">
+            Then <Link to="/bank-deposit" style={{ color: 'var(--sea)', fontWeight: 700 }}>Bank deposit</Link>
+          </div>
         </div>
       </div>
 
