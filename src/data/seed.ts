@@ -19,6 +19,7 @@ export function createSeed(): BooksState {
     nextPoNumber: 501,
     nextQuoteNumber: 2002,
     nextReceiptNumber: 9002,
+    nextBillNumber: 1003,
     locations: [
       {
         id: 'loc_main',
@@ -513,6 +514,65 @@ export function createSeed(): BooksState {
         createdAt: '2026-11-01',
       },
     ],
+    bills: [
+      {
+        id: 'bill_seed_1',
+        number: '1001',
+        vendorId: 'ven_1',
+        date: '2026-11-08',
+        dueDate: '2026-12-08',
+        status: 'open',
+        memo: 'November freight and packaging.',
+        lines: [
+          {
+            id: 'bl_seed_1',
+            categoryAccountId: 'acc_cogs',
+            description: 'Inbound freight',
+            qty: 1,
+            rate: 380,
+            amount: 380,
+          },
+          {
+            id: 'bl_seed_2',
+            categoryAccountId: 'acc_office',
+            description: 'Packaging materials',
+            qty: 1,
+            rate: 145.5,
+            amount: 145.5,
+          },
+        ],
+        subtotal: 525.5,
+        tax: 0,
+        total: 525.5,
+        balance: 525.5,
+        createdAt: '2026-11-08',
+      },
+      {
+        id: 'bill_seed_2',
+        number: '1002',
+        vendorId: 'ven_3',
+        date: '2026-10-20',
+        dueDate: '2026-11-19',
+        status: 'overdue',
+        memo: 'Past-due utilities true-up.',
+        lines: [
+          {
+            id: 'bl_seed_3',
+            categoryAccountId: 'acc_utilities',
+            description: 'Utility true-up Oct',
+            qty: 1,
+            rate: 210,
+            amount: 210,
+          },
+        ],
+        subtotal: 210,
+        tax: 0,
+        total: 210,
+        balance: 210,
+        createdAt: '2026-10-20',
+      },
+    ],
+    billPayments: [],
     purchaseOrders: [
       {
         id: 'po_seed_1',

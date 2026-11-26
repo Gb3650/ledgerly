@@ -39,9 +39,14 @@ export function CustomerDetail() {
             {customer.email || 'No email'} · Open balance {money(customer.balance)}
           </p>
         </div>
-        <Link className="btn btn-primary" to={`/invoices?new=1&customer=${customer.id}`}>
-          New invoice
-        </Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to={`/receive-payment?customer=${customer.id}`}>
+            Receive payment
+          </Link>
+          <Link className="btn btn-primary" to={`/invoices?new=1&customer=${customer.id}`}>
+            New invoice
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-2" style={{ marginBottom: 16 }}>

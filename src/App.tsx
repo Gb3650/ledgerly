@@ -2,15 +2,18 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Accounts } from './pages/Accounts';
 import { Banking } from './pages/Banking';
+import { Bills } from './pages/Bills';
 import { CustomerDetail } from './pages/CustomerDetail';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
 import { Inventory } from './pages/Inventory';
 import { Invoices } from './pages/Invoices';
+import { PayBills } from './pages/PayBills';
 import { Products } from './pages/Products';
 import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Quotes } from './pages/Quotes';
+import { ReceivePayment } from './pages/ReceivePayment';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { SalesReceipts } from './pages/SalesReceipts';
@@ -31,12 +34,15 @@ export default function App() {
             <Route path="invoices" element={<Invoices />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="sales-receipts" element={<SalesReceipts />} />
+            <Route path="receive-payment" element={<ReceivePayment />} />
             <Route path="customers" element={<Customers />} />
             <Route path="customers/:id" element={<CustomerDetail />} />
             <Route path="products" element={<Products />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="purchase-orders" element={<PurchaseOrders />} />
             <Route path="expenses" element={<Expenses />} />
+            <Route path="bills" element={<Bills />} />
+            <Route path="pay-bills" element={<PayBills />} />
             <Route path="vendors" element={<Vendors />} />
             <Route path="vendors/:id" element={<VendorDetail />} />
             <Route path="reports" element={<Reports />} />

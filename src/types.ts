@@ -1,5 +1,6 @@
 export type InvoiceStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'void';
 export type ExpenseStatus = 'unbilled' | 'paid' | 'pending';
+export type BillStatus = 'open' | 'partial' | 'paid' | 'overdue' | 'void';
 export type PoStatus = 'draft' | 'sent' | 'partial' | 'received' | 'cancelled';
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'converted' | 'declined';
 export type AccountType =
@@ -17,7 +18,7 @@ export type AccountType =
   | 'other_income'
   | 'other_expense';
 
-export type TxnType = 'deposit' | 'expense' | 'transfer' | 'payment' | 'sales_receipt';
+export type TxnType = 'deposit' | 'expense' | 'transfer' | 'payment' | 'sales_receipt' | 'bill_payment';
 
 export type StockMovementReason =
   | 'po_receive'
@@ -220,6 +221,43 @@ export interface Expense {
   createdAt: string;
 }
 
+/** QBO-style vendor bill (A/P) with category lines. */
+export interface BillLine {
+  id: string;
+  categoryAccountId: string;
+  description: string;
+  qty: number;
+  rate: number;
+  amount: number;
+}
+
+export interface Bill {
+  id: string;
+  number: string;
+  vendorId: string;
+  date: string;
+  dueDate: string;
+  status: BillStatus;
+  lines: BillLine[];
+  memo: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  balance: number;
+  createdAt: string;
+}
+
+export interface BillPayment {
+  id: string;
+  billId: string;
+  amount: number;
+  date: string;
+  paymentAccountId: string;
+  method: string;
+  memo: string;
+  createdAt: string;
+}
+
 export interface PoLine {
   id: string;
   productId?: string;
@@ -274,10 +312,13 @@ export interface BooksState {
   salesReceipts: SalesReceipt[];
   payments: Payment[];
   expenses: Expense[];
+  bills: Bill[];
+  billPayments: BillPayment[];
   purchaseOrders: PurchaseOrder[];
   transactions: BankTransaction[];
   nextInvoiceNumber: number;
   nextPoNumber: number;
   nextQuoteNumber: number;
   nextReceiptNumber: number;
+  nextBillNumber: number;
 }

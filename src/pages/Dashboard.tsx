@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { monthlyIncomeSeries, profitAndLoss, unpaidInvoices } from '../lib/accounting';
+import { monthlyIncomeSeries, profitAndLoss, unpaidBills, unpaidInvoices } from '../lib/accounting';
 import { inventoryMatrix } from '../lib/inventory';
 import { money, shortDate } from '../lib/format';
 import { QuickOrder } from '../components/QuickOrder';
@@ -15,6 +15,8 @@ export function Dashboard() {
   const openInvoices = unpaidInvoices(state.invoices);
   const openBalance = openInvoices.reduce((s, i) => s + i.balance, 0);
   const overdue = state.invoices.filter((i) => i.status === 'overdue');
+  const openPayables = unpaidBills(state.bills ?? []);
+  const apBalance = openPayables.reduce((s, b) => s + b.balance, 0);
   const banks = state.accounts.filter((a) => a.type === 'bank' || a.type === 'credit_card');
   const lowStock = inventoryMatrix(state).filter(
     (r) => r.product.reorderPoint != null && r.total <= r.product.reorderPoint,
@@ -44,7 +46,10 @@ export function Dashboard() {
           <h1>Dashboard</h1>
           <p>Profit, cash, inventory, and open invoices for {state.company.name}</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/pay-bills">
+            {apBalance ? `Pay bills ${money(apBalance)}` : 'Pay bills'}
+          </Link>
           <Link className="btn btn-ghost" to="/inventory">
             {lowStock.length ? `${lowStock.length} low stock` : 'Inventory'}
           </Link>
@@ -69,10 +74,14 @@ export function Dashboard() {
             Sales {money(pl.income)} − COGS {money(pl.cogs)}
           </div>
         </div>
-        <div className="panel stat">
-          <div className="stat-label">Expenses</div>
-          <div className="stat-value">{money(pl.expenses)}</div>
-          <div className="stat-hint">Paid operating expenses YTD</div>
+        <div className={`panel stat ${apBalance ? 'warning' : ''}`}>
+          <div className="stat-label">Open bills (A/P)</div>
+          <div className="stat-value">{money(apBalance)}</div>
+          <div className="stat-hint">
+            {openPayables.length
+              ? `${openPayables.length} to pay`
+              : `Expenses YTD ${money(pl.expenses)}`}
+          </div>
         </div>
         <div className={`panel stat ${overdue.length ? 'warning' : ''}`}>
           <div className="stat-label">Open invoices</div>

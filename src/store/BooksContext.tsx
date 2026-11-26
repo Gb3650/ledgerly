@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from 'react';
 import { createSeed, STORAGE_KEY } from '../data/seed';
-import { invoiceTotals, markOverdue, refreshBalances } from '../lib/accounting';
+import {
+  billLineTotals,
+  invoiceTotals,
+  markBillsOverdue,
+  markOverdue,
+  refreshBalances,
+} from '../lib/accounting';
 import { fetchCloudBooks, saveCloudBooks } from '../lib/cloudBooks';
 import {
   adjustStock,
@@ -19,6 +25,8 @@ import {
 } from '../lib/inventory';
 import { addDaysISO, todayISO, uid } from '../lib/format';
 import type {
+  Bill,
+  BillLine,
   BooksState,
   Customer,
   Expense,
@@ -106,6 +114,29 @@ interface BooksContextValue {
   }) => { id: string; ok: boolean; shortages?: Array<{ productId: string; need: number; have: number }> };
   addExpense: (input: Omit<Expense, 'id' | 'createdAt'>) => void;
   payExpense: (id: string) => void;
+  saveBill: (input: {
+    id?: string;
+    vendorId: string;
+    date: string;
+    dueDate: string;
+    memo: string;
+    lines: Array<Omit<BillLine, 'id' | 'amount'>>;
+  }) => string;
+  voidBill: (billId: string) => void;
+  payBills: (input: {
+    paymentAccountId: string;
+    date: string;
+    method?: string;
+    memo?: string;
+    allocations: Array<{ billId: string; amount: number }>;
+  }) => void;
+  receivePayments: (input: {
+    customerId: string;
+    date: string;
+    method?: string;
+    memo?: string;
+    allocations: Array<{ invoiceId: string; amount: number }>;
+  }) => void;
   savePurchaseOrder: (input: {
     id?: string;
     vendorId: string;
@@ -146,6 +177,8 @@ function normalize(raw: BooksState): BooksState {
     stockTransfers: raw.stockTransfers ?? [],
     stockMovements: raw.stockMovements ?? [],
     payments: raw.payments ?? [],
+    bills: markBillsOverdue(raw.bills ?? []),
+    billPayments: raw.billPayments ?? [],
     purchaseOrders: raw.purchaseOrders ?? [],
     quotes: raw.quotes ?? [],
     salesReceipts: raw.salesReceipts ?? [],
@@ -153,6 +186,7 @@ function normalize(raw: BooksState): BooksState {
     nextPoNumber: raw.nextPoNumber ?? 501,
     nextQuoteNumber: raw.nextQuoteNumber ?? 2001,
     nextReceiptNumber: raw.nextReceiptNumber ?? 9001,
+    nextBillNumber: raw.nextBillNumber ?? 1001,
     invoices: markOverdue(raw.invoices ?? []),
   });
 }
@@ -904,9 +938,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
           accounts: prev.accounts.map((a) =>
             a.id === paymentAccountId
               ? { ...a, balance: a.balance - exp.amount }
-              : a.id === 'acc_ap'
-                ? { ...a, balance: Math.max(0, a.balance - exp.amount) }
-                : a,
+              : a,
           ),
           transactions: [
             {
@@ -919,6 +951,218 @@ export function BooksProvider({ children }: { children: ReactNode }) {
               matched: true,
               categoryAccountId: exp.categoryAccountId,
               payee: exp.payeeName,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const saveBill = useCallback(
+    (input: {
+      id?: string;
+      vendorId: string;
+      date: string;
+      dueDate: string;
+      memo: string;
+      lines: Array<Omit<BillLine, 'id' | 'amount'>>;
+    }) => {
+      let newId = input.id ?? uid('bill');
+      commit((prev) => {
+        const existing = input.id ? (prev.bills ?? []).find((b) => b.id === input.id) : undefined;
+        if (existing && (existing.status === 'paid' || existing.status === 'void')) return prev;
+        const lines: BillLine[] = input.lines
+          .filter((l) => l.description && l.qty > 0)
+          .map((l, i) => ({
+            categoryAccountId: l.categoryAccountId,
+            description: l.description,
+            qty: l.qty,
+            rate: l.rate,
+            id: existing?.lines[i]?.id ?? uid('bl'),
+            amount: Math.round(l.qty * l.rate * 100) / 100,
+          }));
+        const totals = billLineTotals(lines);
+        const paid = existing ? existing.total - existing.balance : 0;
+        const balance = Math.max(0, Math.round((totals.total - paid) * 100) / 100);
+        let status: Bill['status'] = 'open';
+        if (balance <= 0) status = 'paid';
+        else if (paid > 0) status = 'partial';
+        else if (input.dueDate < todayISO()) status = 'overdue';
+        const bill: Bill = {
+          id: newId,
+          number: existing?.number ?? String(prev.nextBillNumber ?? 1001),
+          vendorId: input.vendorId,
+          date: input.date,
+          dueDate: input.dueDate,
+          status,
+          lines,
+          memo: input.memo,
+          ...totals,
+          balance,
+          createdAt: existing?.createdAt ?? todayISO(),
+        };
+        const bills = existing
+          ? (prev.bills ?? []).map((b) => (b.id === existing.id ? bill : b))
+          : [bill, ...(prev.bills ?? [])];
+        return {
+          ...prev,
+          bills,
+          nextBillNumber: existing ? prev.nextBillNumber : (prev.nextBillNumber ?? 1001) + 1,
+        };
+      });
+      return newId;
+    },
+    [commit],
+  );
+
+  const voidBill = useCallback(
+    (billId: string) => {
+      commit((prev) => ({
+        ...prev,
+        bills: (prev.bills ?? []).map((b) =>
+          b.id === billId && b.status !== 'paid'
+            ? { ...b, status: 'void' as const, balance: 0 }
+            : b,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const payBills = useCallback(
+    (input: {
+      paymentAccountId: string;
+      date: string;
+      method?: string;
+      memo?: string;
+      allocations: Array<{ billId: string; amount: number }>;
+    }) => {
+      commit((prev) => {
+        const allocs = input.allocations.filter((a) => a.amount > 0);
+        if (!allocs.length) return prev;
+        let bills = [...(prev.bills ?? [])];
+        const newPayments = [...(prev.billPayments ?? [])];
+        let totalPaid = 0;
+        const payeeNames: string[] = [];
+
+        for (const alloc of allocs) {
+          const bill = bills.find((b) => b.id === alloc.billId);
+          if (!bill || bill.status === 'void' || bill.balance <= 0) continue;
+          const pay = Math.min(alloc.amount, bill.balance);
+          if (pay <= 0) continue;
+          totalPaid += pay;
+          const vendor = prev.vendors.find((v) => v.id === bill.vendorId);
+          if (vendor) payeeNames.push(vendor.name);
+          const balance = Math.round((bill.balance - pay) * 100) / 100;
+          const status: Bill['status'] =
+            balance <= 0 ? 'paid' : balance < bill.total ? 'partial' : bill.status;
+          bills = bills.map((b) => (b.id === bill.id ? { ...b, balance, status } : b));
+          newPayments.unshift({
+            id: uid('bpay'),
+            billId: bill.id,
+            amount: pay,
+            date: input.date,
+            paymentAccountId: input.paymentAccountId,
+            method: input.method ?? 'Check',
+            memo: input.memo ?? '',
+            createdAt: todayISO(),
+          });
+        }
+
+        if (totalPaid <= 0) return prev;
+        const label =
+          payeeNames.length === 1
+            ? payeeNames[0]
+            : `Bill payment (${allocs.length})`;
+
+        return {
+          ...prev,
+          bills,
+          billPayments: newPayments,
+          accounts: prev.accounts.map((a) =>
+            a.id === input.paymentAccountId
+              ? { ...a, balance: a.balance - totalPaid }
+              : a,
+          ),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: input.paymentAccountId,
+              date: input.date,
+              description: label,
+              amount: -totalPaid,
+              type: 'bill_payment' as const,
+              matched: true,
+              categoryAccountId: 'acc_ap',
+              payee: label,
+            },
+            ...prev.transactions,
+          ],
+        };
+      });
+    },
+    [commit],
+  );
+
+  const receivePayments = useCallback(
+    (input: {
+      customerId: string;
+      date: string;
+      method?: string;
+      memo?: string;
+      allocations: Array<{ invoiceId: string; amount: number }>;
+    }) => {
+      commit((prev) => {
+        const allocs = input.allocations.filter((a) => a.amount > 0);
+        if (!allocs.length) return prev;
+        let invoices = [...prev.invoices];
+        const payments = [...(prev.payments ?? [])];
+        let total = 0;
+
+        for (const alloc of allocs) {
+          const inv = invoices.find((i) => i.id === alloc.invoiceId);
+          if (!inv || inv.customerId !== input.customerId || inv.balance <= 0) continue;
+          if (inv.status === 'draft' || inv.status === 'void' || inv.status === 'paid') continue;
+          const pay = Math.min(alloc.amount, inv.balance);
+          if (pay <= 0) continue;
+          total += pay;
+          const balance = Math.round((inv.balance - pay) * 100) / 100;
+          const status = balance <= 0 ? ('paid' as const) : ('partial' as const);
+          invoices = invoices.map((i) => (i.id === inv.id ? { ...i, balance, status } : i));
+          payments.unshift({
+            id: uid('pay'),
+            invoiceId: inv.id,
+            amount: pay,
+            date: input.date,
+            method: input.method ?? 'Check',
+            memo: input.memo ?? '',
+            createdAt: todayISO(),
+          });
+        }
+
+        if (total <= 0) return prev;
+        const customer = prev.customers.find((c) => c.id === input.customerId);
+
+        return {
+          ...prev,
+          invoices,
+          payments,
+          accounts: prev.accounts.map((a) =>
+            a.id === 'acc_checking' ? { ...a, balance: a.balance + total } : a,
+          ),
+          transactions: [
+            {
+              id: uid('txn'),
+              accountId: 'acc_checking',
+              date: input.date,
+              description: `Payment from ${customer?.name ?? 'customer'}`,
+              amount: total,
+              type: 'payment' as const,
+              matched: true,
+              categoryAccountId: 'acc_ar',
+              payee: customer?.name,
             },
             ...prev.transactions,
           ],
@@ -1078,6 +1322,10 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       saveSalesReceipt,
       addExpense,
       payExpense,
+      saveBill,
+      voidBill,
+      payBills,
+      receivePayments,
       savePurchaseOrder,
       receivePo,
       matchTransaction,
@@ -1110,6 +1358,10 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       saveSalesReceipt,
       addExpense,
       payExpense,
+      saveBill,
+      voidBill,
+      payBills,
+      receivePayments,
       savePurchaseOrder,
       receivePo,
       matchTransaction,

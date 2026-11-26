@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  apAging,
   arAging,
   balanceSheet,
   inventoryValuation,
@@ -13,7 +14,7 @@ import { useBooks } from '../store/BooksContext';
 export function Reports() {
   const { state } = useBooks();
   const [report, setReport] = useState<
-    'pl' | 'bs' | 'ar' | 'product' | 'vendor' | 'inventory' | 'movement'
+    'pl' | 'bs' | 'ar' | 'ap' | 'product' | 'vendor' | 'inventory' | 'movement'
   >('pl');
   const [from, setFrom] = useState('2026-01-01');
   const [to, setTo] = useState('2026-12-31');
@@ -21,6 +22,7 @@ export function Reports() {
   const pl = useMemo(() => profitAndLoss(state, from, to), [state, from, to]);
   const bs = useMemo(() => balanceSheet(state), [state]);
   const ar = useMemo(() => arAging(state.invoices, state.customers), [state]);
+  const ap = useMemo(() => apAging(state.bills ?? [], state.vendors), [state]);
   const byProduct = useMemo(() => salesByProduct(state, from, to), [state, from, to]);
   const byVendor = useMemo(() => spendByVendor(state, from, to), [state, from, to]);
   const valuation = useMemo(() => inventoryValuation(state), [state]);
@@ -57,6 +59,7 @@ export function Reports() {
             ['pl', 'Profit & Loss'],
             ['bs', 'Balance Sheet'],
             ['ar', 'A/R Aging'],
+            ['ap', 'A/P Aging'],
             ['product', 'By product'],
             ['vendor', 'By vendor'],
             ['inventory', 'Inventory value'],
@@ -251,6 +254,64 @@ export function Reports() {
         </div>
       ) : null}
 
+      {report === 'ap' ? (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>A/P Aging</h2>
+          </div>
+          <div className="panel-pad">
+            <div className="grid grid-4" style={{ marginBottom: 16 }}>
+              {(
+                [
+                  ['Current', ap.buckets.current],
+                  ['1–30', ap.buckets.d30],
+                  ['31–60', ap.buckets.d60],
+                  ['61+', ap.buckets.d90],
+                ] as const
+              ).map(([label, amt]) => (
+                <div key={label} className="panel stat">
+                  <div className="stat-label">{label}</div>
+                  <div className="stat-value" style={{ fontSize: '1.2rem' }}>
+                    {money(amt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Vendor</th>
+                    <th>Bill</th>
+                    <th>Due</th>
+                    <th>Days</th>
+                    <th className="num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ap.rows.map((r) => (
+                    <tr key={r.bill.id}>
+                      <td>{r.vendorName}</td>
+                      <td>#{r.bill.number}</td>
+                      <td>{shortDate(r.bill.dueDate)}</td>
+                      <td>{r.days}</td>
+                      <td className="num">{money(r.bill.balance)}</td>
+                    </tr>
+                  ))}
+                  {ap.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="empty">
+                        No open payables.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {report === 'product' ? (
         <div className="panel">
           <div className="panel-head" style={{ flexWrap: 'wrap' }}>
@@ -296,6 +357,7 @@ export function Reports() {
                 <tr>
                   <th>Vendor</th>
                   <th className="num">Expenses</th>
+                  <th className="num">Bills</th>
                   <th className="num">POs</th>
                   <th className="num">Total</th>
                 </tr>
@@ -305,6 +367,7 @@ export function Reports() {
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td className="num">{money(r.expenses)}</td>
+                    <td className="num">{money(r.bills)}</td>
                     <td className="num">{money(r.pos)}</td>
                     <td className="num">{money(r.total)}</td>
                   </tr>

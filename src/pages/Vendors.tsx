@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { money, shortDate } from '../lib/format';
+import { HubTabs, expensesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 
@@ -32,6 +33,7 @@ export function Vendors() {
 
   return (
     <div>
+      <HubTabs tabs={expensesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Vendors</h1>

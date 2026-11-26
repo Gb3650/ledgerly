@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { inventoryMatrix } from '../lib/inventory';
 import { shortDate } from '../lib/format';
+import { HubTabs, expensesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 
@@ -79,6 +80,7 @@ export function Inventory() {
 
   return (
     <div>
+      <HubTabs tabs={expensesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Inventory by location</h1>

@@ -6,7 +6,7 @@ export function StatusBadge({ status }: { status: string }) {
     status === 'accepted' ||
     status === 'converted'
       ? 'badge-paid'
-      : status === 'sent' || status === 'pending' || status === 'partial'
+      : status === 'sent' || status === 'pending' || status === 'partial' || status === 'open'
         ? 'badge-sent'
         : status === 'overdue' ||
             status === 'unmatched' ||

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoiceTotals } from '../lib/accounting';
 import { addDaysISO, money, shortDate, todayISO } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
@@ -106,6 +107,7 @@ export function Quotes() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Estimates</h1>
