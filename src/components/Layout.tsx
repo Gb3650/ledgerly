@@ -4,60 +4,37 @@ import {
   BarChart3,
   BookOpen,
   Building2,
-  ClipboardList,
   CreditCard,
   FileText,
+  Grid3x3,
+  HelpCircle,
   LayoutDashboard,
-  MapPin,
   Menu,
-  Package,
+  Percent,
   Plus,
-  Receipt,
   Search,
   Settings,
-  Users,
   Wallet,
   X,
 } from 'lucide-react';
 import { Modal } from './Modal';
 import { useBooks } from '../store/BooksContext';
 
-/** QBO-style left navigation */
-const nav = [
-  {
-    label: '',
-    items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/banking', icon: Wallet, label: 'Banking' },
-    ],
-  },
-  {
-    label: 'Sales',
-    items: [
-      { to: '/sales', icon: FileText, label: 'All sales' },
-      { to: '/invoices', icon: Receipt, label: 'Invoices' },
-      { to: '/customers', icon: Users, label: 'Customers' },
-      { to: '/products', icon: Package, label: 'Products & services' },
-    ],
-  },
-  {
-    label: 'Expenses',
-    items: [
-      { to: '/expenses', icon: CreditCard, label: 'Expenses' },
-      { to: '/bills', icon: FileText, label: 'Bills' },
-      { to: '/vendors', icon: Building2, label: 'Vendors' },
-      { to: '/purchase-orders', icon: ClipboardList, label: 'Purchase orders' },
-      { to: '/inventory', icon: MapPin, label: 'Inventory' },
-    ],
-  },
-  {
-    label: 'Accounting',
-    items: [
-      { to: '/reports', icon: BarChart3, label: 'Reports' },
-      { to: '/accounts', icon: BookOpen, label: 'Chart of accounts' },
-      { to: '/settings', icon: Settings, label: 'Settings' },
-    ],
-  },
+/** QBO Accountant View — left navigation */
+const navItems: Array<{
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  end?: boolean;
+}> = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/banking', icon: Wallet, label: 'Banking' },
+  { to: '/sales', icon: FileText, label: 'Sales' },
+  { to: '/expenses', icon: CreditCard, label: 'Expenses' },
+  { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/taxes', icon: Percent, label: 'Taxes' },
+  { to: '/accounts', icon: BookOpen, label: 'Accounting' },
+  { to: '/apps', icon: Grid3x3, label: 'Apps' },
 ];
 
 /** QBO + New menu: Customers | Vendors | Other */
@@ -77,6 +54,7 @@ const newMenu = [
     label: 'VENDORS',
     items: [
       { to: '/expenses?new=1', label: 'Expense' },
+      { to: '/banking', label: 'Check' },
       { to: '/bills?new=1', label: 'Bill' },
       { to: '/pay-bills', label: 'Pay bills' },
       { to: '/purchase-orders?new=1', label: 'Purchase order' },
@@ -87,9 +65,31 @@ const newMenu = [
     label: 'OTHER',
     items: [
       { to: '/banking', label: 'Bank deposit' },
-      { to: '/inventory', label: 'Inventory qty' },
+      { to: '/banking', label: 'Transfer' },
+      { to: '/banking', label: 'Reconcile' },
+      { to: '/inventory', label: 'Inventory qty adjustment' },
       { to: '/accounts', label: 'Chart of accounts' },
-      { to: '/reports', label: 'Statement / report' },
+    ],
+  },
+];
+
+const gearMenu = [
+  {
+    label: 'YOUR COMPANY',
+    items: [
+      { to: '/settings', label: 'Account and settings' },
+      { to: '/accounts', label: 'Chart of accounts' },
+      { to: '/products', label: 'Products and services' },
+      { to: '/banking', label: 'Reconcile' },
+    ],
+  },
+  {
+    label: 'LISTS',
+    items: [
+      { to: '/customers', label: 'All customers' },
+      { to: '/vendors', label: 'All vendors' },
+      { to: '/inventory', label: 'Inventory' },
+      { to: '/reports', label: 'All reports' },
     ],
   },
 ];
@@ -97,11 +97,13 @@ const newMenu = [
 export function Layout() {
   const { state, resetSampleData } = useBooks();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [gearOpen, setGearOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [resetFlash, setResetFlash] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const gearRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   function confirmReset() {
@@ -114,7 +116,9 @@ export function Layout() {
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t)) setMenuOpen(false);
+      if (!gearRef.current?.contains(t)) setGearOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -175,54 +179,125 @@ export function Layout() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell qbo-shell">
+      <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="brand-mark">L</div>
+          <div className="brand-text">
+            <div className="brand-name">Ledgerly</div>
+            <div className="brand-sub">Online</div>
+          </div>
+        </div>
+
+        <div className="rel sidebar-new" ref={menuRef}>
+          <button
+            type="button"
+            className="btn btn-new"
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setGearOpen(false);
+            }}
+            aria-expanded={menuOpen}
+          >
+            <Plus size={18} strokeWidth={2.5} /> New
+          </button>
+          {menuOpen ? (
+            <div className="menu-pop menu-pop-qbo menu-pop-3 menu-pop-new">
+              {newMenu.map((col) => (
+                <div className="menu-col" key={col.label}>
+                  <div className="menu-col-label">{col.label}</div>
+                  {col.items.map((item) => (
+                    <button
+                      type="button"
+                      key={item.to + item.label}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate(item.to);
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Primary">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              onClick={() => setNavOpen(false)}
+            >
+              <item.icon />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+
       <header className="topbar">
         <button
+          type="button"
           className="btn btn-ghost btn-sm mobile-nav-toggle"
           onClick={() => setNavOpen((v) => !v)}
           aria-label="Menu"
         >
           {navOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
-        <div className="brand">
-          <div className="brand-mark">L</div>
-          <div className="brand-text">
-            <div className="brand-name">Ledgerly</div>
-            <div className="brand-sub">Books</div>
-          </div>
-        </div>
-        <div className="company-pill">
-          <Building2 size={14} />
-          {state.company.name}
-        </div>
+
+        <button
+          type="button"
+          className="company-switcher"
+          onClick={() => navigate('/settings')}
+          title="Company"
+        >
+          <Building2 size={16} />
+          <span>{state.company.name}</span>
+        </button>
+
         <form className="search" onSubmit={onSearch}>
           <Search size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search receipts, customers, vendors, bills…"
+            placeholder="Search transactions, customers, vendors…"
             aria-label="Search"
           />
         </form>
+
         <div className="top-actions">
-          <div className="rel" ref={menuRef}>
+          <button type="button" className="icon-btn" aria-label="Help" title="Help">
+            <HelpCircle size={18} />
+          </button>
+          <div className="rel" ref={gearRef}>
             <button
-              className="btn btn-primary btn-new"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-expanded={menuOpen}
+              type="button"
+              className="icon-btn"
+              aria-label="Settings"
+              aria-expanded={gearOpen}
+              onClick={() => {
+                setGearOpen((v) => !v);
+                setMenuOpen(false);
+              }}
             >
-              <Plus size={16} /> New
+              <Settings size={18} />
             </button>
-            {menuOpen ? (
-              <div className="menu-pop menu-pop-qbo menu-pop-3">
-                {newMenu.map((col) => (
+            {gearOpen ? (
+              <div className="menu-pop menu-pop-gear">
+                {gearMenu.map((col) => (
                   <div className="menu-col" key={col.label}>
                     <div className="menu-col-label">{col.label}</div>
                     {col.items.map((item) => (
                       <button
+                        type="button"
                         key={item.to + item.label}
                         onClick={() => {
-                          setMenuOpen(false);
+                          setGearOpen(false);
                           navigate(item.to);
                         }}
                       >
@@ -231,52 +306,38 @@ export function Layout() {
                     ))}
                   </div>
                 ))}
+                <div className="menu-col">
+                  <div className="menu-col-label">TOOLS</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGearOpen(false);
+                      setResetOpen(true);
+                    }}
+                  >
+                    Reset starter data
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
-        {nav.map((section, idx) => (
-          <div className="nav-section" key={section.label || `top-${idx}`}>
-            {section.label ? <div className="nav-label">{section.label}</div> : null}
-            {section.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                onClick={() => setNavOpen(false)}
-              >
-                <item.icon />
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </aside>
-
       <main className="main">
         <div className="sample-banner">
           <span>
-            Testing as <strong>{state.company.name}</strong> — data saves in this browser
+            Sample company <strong>{state.company.name}</strong>
             {resetFlash ? (
               <>
                 {' '}
-                · <strong style={{ color: 'var(--sea)' }}>Starter data restored</strong>
+                · <strong className="ok-flash">Starter data restored</strong>
               </>
             ) : (
-              <>
-                . Use Settings → Download backup. Not affiliated with Intuit QuickBooks.
-              </>
+              <> — Not affiliated with Intuit QuickBooks. Gear → Account and settings for backup.</>
             )}
           </span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => setResetOpen(true)}
-          >
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setResetOpen(true)}>
             Reset starter data
           </button>
         </div>

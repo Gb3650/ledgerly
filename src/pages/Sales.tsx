@@ -66,7 +66,7 @@ export function Sales() {
       <div className="page-header">
         <div>
           <h1>Sales</h1>
-          <p>Invoices, estimates, and cash sales in one place.</p>
+          <p>Overview of invoices, estimates, and cash sales.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link className="btn btn-ghost" to="/receive-payment">

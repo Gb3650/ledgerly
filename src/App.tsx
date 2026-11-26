@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Accounts } from './pages/Accounts';
+import { Apps } from './pages/Apps';
 import { Banking } from './pages/Banking';
 import { Bills } from './pages/Bills';
 import { CustomerDetail } from './pages/CustomerDetail';
@@ -18,6 +19,7 @@ import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { SalesReceipts } from './pages/SalesReceipts';
 import { Settings } from './pages/Settings';
+import { Taxes } from './pages/Taxes';
 import { VendorDetail } from './pages/VendorDetail';
 import { Vendors } from './pages/Vendors';
 import { BooksProvider } from './store/BooksContext';
@@ -46,7 +48,9 @@ export default function App() {
             <Route path="vendors" element={<Vendors />} />
             <Route path="vendors/:id" element={<VendorDetail />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="taxes" element={<Taxes />} />
             <Route path="accounts" element={<Accounts />} />
+            <Route path="apps" element={<Apps />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

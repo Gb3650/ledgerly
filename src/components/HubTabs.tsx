@@ -20,7 +20,7 @@ export function HubTabs({ tabs }: { tabs: HubTab[] }) {
 }
 
 export const salesHubTabs: HubTab[] = [
-  { to: '/sales', label: 'All sales', end: true },
+  { to: '/sales', label: 'Overview', end: true },
   { to: '/invoices', label: 'Invoices' },
   { to: '/quotes', label: 'Estimates' },
   { to: '/sales-receipts', label: 'Sales receipts' },
@@ -31,9 +31,18 @@ export const salesHubTabs: HubTab[] = [
 
 export const expensesHubTabs: HubTab[] = [
   { to: '/expenses', label: 'Expenses', end: true },
-  { to: '/bills', label: 'Bills' },
   { to: '/vendors', label: 'Vendors' },
+  { to: '/bills', label: 'Bills' },
   { to: '/purchase-orders', label: 'Purchase orders' },
   { to: '/pay-bills', label: 'Pay bills' },
   { to: '/inventory', label: 'Inventory' },
+];
+
+/** Banking extras (checks/deposit/transfer/reconcile) land in the stacked banking PR. */
+export const bankingHubTabs: HubTab[] = [
+  { to: '/banking', label: 'Bank transactions', end: true },
+];
+
+export const accountingHubTabs: HubTab[] = [
+  { to: '/accounts', label: 'Chart of accounts', end: true },
 ];

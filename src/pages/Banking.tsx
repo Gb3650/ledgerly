@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { money, shortDate } from '../lib/format';
+import { HubTabs, bankingHubTabs } from '../components/HubTabs';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
 
@@ -28,6 +29,7 @@ export function Banking() {
 
   return (
     <div>
+      <HubTabs tabs={bankingHubTabs} />
       <div className="page-header">
         <div>
           <h1>Banking</h1>
