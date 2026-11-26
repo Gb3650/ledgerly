@@ -29,12 +29,12 @@ export const salesHubTabs: HubTab[] = [
   { to: '/receive-payment', label: 'Receive payment' },
 ];
 
+/** QBO Expenses center: Expenses · Vendors · Bills · Purchase orders · Inventory */
 export const expensesHubTabs: HubTab[] = [
   { to: '/expenses', label: 'Expenses', end: true },
   { to: '/vendors', label: 'Vendors' },
   { to: '/bills', label: 'Bills' },
   { to: '/purchase-orders', label: 'Purchase orders' },
-  { to: '/pay-bills', label: 'Pay bills' },
   { to: '/inventory', label: 'Inventory' },
 ];
 
