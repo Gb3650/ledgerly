@@ -24,12 +24,16 @@ export function PayBills() {
     const preset: Record<string, number> = {};
     for (const b of open) preset[b.id] = 0;
     const billId = params.get('bill');
+    const vendorId = params.get('vendor');
     if (billId) {
       const bill = open.find((b) => b.id === billId);
       if (bill) {
         preset[bill.id] = bill.balance;
         setVendorFilter(bill.vendorId);
       }
+      setParams({}, { replace: true });
+    } else if (vendorId) {
+      setVendorFilter(vendorId);
       setParams({}, { replace: true });
     }
     setAmounts(preset);
@@ -78,11 +82,18 @@ export function PayBills() {
       <div className="page-header">
         <div>
           <h1>Pay bills</h1>
-          <p>Select open vendor bills and pay them from a bank or credit card account.</p>
+          <p>
+            Choose open bills, set payment amounts, and pay from one bank or credit card account.
+          </p>
         </div>
-        <Link className="btn btn-ghost" to="/bills?new=1">
-          Create bill
-        </Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/bills">
+            Bills
+          </Link>
+          <Link className="btn btn-ghost" to="/bills?new=1">
+            Create bill
+          </Link>
+        </div>
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}>

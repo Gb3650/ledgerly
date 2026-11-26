@@ -113,9 +113,12 @@ export function Bills() {
       <div className="page-header">
         <div>
           <h1>Bills</h1>
-          <p>Enter vendor bills to track what you owe — then pay them from Pay bills.</p>
+          <p>Enter bills to increase Accounts Payable — pay them later from Pay bills.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/expenses?new=1">
+            Expense
+          </Link>
           <Link className="btn btn-ghost" to="/pay-bills">
             Pay bills
           </Link>
@@ -159,12 +162,12 @@ export function Bills() {
             <thead>
               <tr>
                 <th>Date</th>
-                <th>No.</th>
+                <th>Bill no.</th>
                 <th>Vendor</th>
-                <th>Due</th>
+                <th>Due date</th>
                 <th>Status</th>
                 <th className="num">Total</th>
-                <th className="num">Balance</th>
+                <th className="num">Open balance</th>
                 <th></th>
               </tr>
             </thead>
