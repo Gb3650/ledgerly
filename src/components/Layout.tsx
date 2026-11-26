@@ -35,8 +35,6 @@ const nav = [
     items: [
       { to: '/sales', icon: FileText, label: 'All sales' },
       { to: '/invoices', icon: Receipt, label: 'Invoices' },
-      { to: '/quotes', icon: FileText, label: 'Estimates' },
-      { to: '/sales-receipts', icon: Wallet, label: 'Sales receipts' },
       { to: '/customers', icon: Users, label: 'Customers' },
       { to: '/products', icon: Package, label: 'Products & services' },
     ],
@@ -45,6 +43,7 @@ const nav = [
     label: 'Expenses',
     items: [
       { to: '/expenses', icon: CreditCard, label: 'Expenses' },
+      { to: '/bills', icon: FileText, label: 'Bills' },
       { to: '/vendors', icon: Building2, label: 'Vendors' },
       { to: '/purchase-orders', icon: ClipboardList, label: 'Purchase orders' },
       { to: '/inventory', icon: MapPin, label: 'Inventory' },
@@ -60,11 +59,13 @@ const nav = [
   },
 ];
 
+/** QBO + New menu: Customers | Vendors | Other */
 const newMenu = [
   {
     label: 'CUSTOMERS',
     items: [
       { to: '/invoices?new=1', label: 'Invoice' },
+      { to: '/receive-payment', label: 'Receive payment' },
       { to: '/quotes?new=1', label: 'Estimate' },
       { to: '/sales-receipts?new=1', label: 'Sales receipt' },
       { to: '/customers?new=1', label: 'Customer' },
@@ -75,9 +76,19 @@ const newMenu = [
     label: 'VENDORS',
     items: [
       { to: '/expenses?new=1', label: 'Expense' },
+      { to: '/bills?new=1', label: 'Bill' },
+      { to: '/pay-bills', label: 'Pay bills' },
       { to: '/purchase-orders?new=1', label: 'Purchase order' },
       { to: '/vendors?new=1', label: 'Vendor' },
-      { to: '/inventory', label: 'Inventory' },
+    ],
+  },
+  {
+    label: 'OTHER',
+    items: [
+      { to: '/banking', label: 'Bank deposit' },
+      { to: '/inventory', label: 'Inventory qty' },
+      { to: '/accounts', label: 'Chart of accounts' },
+      { to: '/reports', label: 'Statement / report' },
     ],
   },
 ];
@@ -127,6 +138,14 @@ export function Layout() {
     const vendor = state.vendors.find((v) => v.name.toLowerCase().includes(q));
     if (vendor) {
       navigate(`/vendors/${vendor.id}`);
+      setQuery('');
+      return;
+    }
+    const bill = (state.bills ?? []).find(
+      (b) => b.number.includes(q.replace(/^#/, '')) || `bill-${b.number}`.includes(q),
+    );
+    if (bill) {
+      navigate(`/bills?open=${bill.id}`);
       setQuery('');
       return;
     }
@@ -184,7 +203,7 @@ export function Layout() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search receipts, customers, vendors, invoices…"
+            placeholder="Search receipts, customers, vendors, bills…"
             aria-label="Search"
           />
         </form>
@@ -198,7 +217,7 @@ export function Layout() {
               <Plus size={16} /> New
             </button>
             {menuOpen ? (
-              <div className="menu-pop menu-pop-qbo">
+              <div className="menu-pop menu-pop-qbo menu-pop-3">
                 {newMenu.map((col) => (
                   <div className="menu-col" key={col.label}>
                     <div className="menu-col-label">{col.label}</div>

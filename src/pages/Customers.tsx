@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { money, shortDate } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 
@@ -36,6 +37,7 @@ export function Customers() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Customers</h1>

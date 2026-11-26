@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { invoiceTotals } from '../lib/accounting';
 import { addDaysISO, money, shortDate, todayISO } from '../lib/format';
+import { HubTabs, expensesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
@@ -143,6 +144,7 @@ export function PurchaseOrders() {
 
   return (
     <div>
+      <HubTabs tabs={expensesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Purchase orders</h1>

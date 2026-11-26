@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { invoiceTotals } from '../lib/accounting';
 import { stockQty } from '../lib/inventory';
 import { money, shortDate, todayISO } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 import type { SalesReceipt } from '../types';
@@ -119,6 +120,7 @@ export function SalesReceipts() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Sales receipts</h1>

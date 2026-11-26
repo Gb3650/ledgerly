@@ -937,6 +937,47 @@ a.linkish:hover {
   padding: 14px 12px;
 }
 
+.menu-pop-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+  min-width: 520px;
+}
+
+.hub-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hub-tab {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  transition: background 0.15s, color 0.15s;
+}
+
+.hub-tab:hover {
+  background: rgba(31, 111, 95, 0.08);
+  color: var(--ink);
+}
+
+.hub-tab.active {
+  background: var(--sea-soft);
+  color: var(--sea-deep);
+}
+
+.linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
 .menu-col-label {
   font-size: 0.7rem;
   font-weight: 700;
@@ -982,6 +1023,13 @@ a.linkish:hover {
 }
 
 @media (max-width: 900px) {
+  .menu-pop-3 {
+    grid-template-columns: 1fr;
+    min-width: min(320px, 92vw);
+    max-height: 70vh;
+    overflow: auto;
+  }
+
   .app-shell {
     grid-template-columns: 1fr;
   }

@@ -20,6 +20,9 @@ export function VendorDetail() {
   const expenses = state.expenses
     .filter((e) => e.payeeId === vendor.id || e.payeeName === vendor.name)
     .sort((a, b) => b.date.localeCompare(a.date));
+  const bills = (state.bills ?? [])
+    .filter((b) => b.vendorId === vendor.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const pos = state.purchaseOrders
     .filter((p) => p.vendorId === vendor.id)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -38,9 +41,60 @@ export function VendorDetail() {
             {vendor.category} · {vendor.email || 'No email'} · Open {money(vendor.balance)}
           </p>
         </div>
-        <Link className="btn btn-primary" to={`/purchase-orders?new=1`}>
-          New PO
-        </Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to={`/bills?new=1&vendor=${vendor.id}`}>
+            New bill
+          </Link>
+          <Link className="btn btn-primary" to={`/purchase-orders?new=1`}>
+            New PO
+          </Link>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head">
+          <h2>Bills</h2>
+          <Link to="/pay-bills" style={{ color: 'var(--sea)', fontWeight: 600, fontSize: '0.85rem' }}>
+            Pay bills
+          </Link>
+        </div>
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Bill #</th>
+                <th>Due</th>
+                <th>Status</th>
+                <th className="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bills.map((bill) => (
+                <tr key={bill.id}>
+                  <td>{shortDate(bill.date)}</td>
+                  <td>
+                    <Link to={`/bills?open=${bill.id}`} style={{ color: 'var(--sea)', fontWeight: 700 }}>
+                      #{bill.number}
+                    </Link>
+                  </td>
+                  <td>{shortDate(bill.dueDate)}</td>
+                  <td>
+                    <StatusBadge status={bill.status} />
+                  </td>
+                  <td className="num">{money(bill.balance)}</td>
+                </tr>
+              ))}
+              {bills.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="empty">
+                    No bills for this vendor.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid grid-2" style={{ marginBottom: 16 }}>

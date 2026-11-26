@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { invoiceBodyText, invoiceTotals } from '../lib/accounting';
 import { stockQty } from '../lib/inventory';
 import { addDaysISO, money, shortDate, todayISO } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
@@ -174,14 +175,20 @@ export function Invoices() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Invoices</h1>
           <p>Create, email, and record full or partial payments.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => openNew()}>
-          Create invoice
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/receive-payment">
+            Receive payment
+          </Link>
+          <button className="btn btn-primary" onClick={() => openNew()}>
+            Create invoice
+          </button>
+        </div>
       </div>
 
       <div className="list-toolbar">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { money } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { useBooks } from '../store/BooksContext';
 import type { Product } from '../types';
@@ -81,6 +82,7 @@ export function Products() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Products &amp; services</h1>

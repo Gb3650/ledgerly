@@ -1,5 +1,6 @@
 import type {
   Account,
+  Bill,
   BooksState,
   Expense,
   Invoice,
@@ -19,6 +20,21 @@ export function openReceivableStatuses(status: Invoice['status']) {
 
 export function unpaidInvoices(invoices: Invoice[]): Invoice[] {
   return invoices.filter((i) => openReceivableStatuses(i.status) && i.balance > 0);
+}
+
+export function openPayableStatuses(status: Bill['status']) {
+  return status === 'open' || status === 'partial' || status === 'overdue';
+}
+
+export function unpaidBills(bills: Bill[]): Bill[] {
+  return (bills ?? []).filter((b) => openPayableStatuses(b.status) && b.balance > 0);
+}
+
+export function billLineTotals(lines: { qty: number; rate: number }[], taxRate = 0) {
+  const subtotal = Math.round(lines.reduce((s, l) => s + l.qty * l.rate, 0) * 100) / 100;
+  const tax = Math.round(subtotal * taxRate * 100) / 100;
+  const total = Math.round((subtotal + tax) * 100) / 100;
+  return { subtotal, tax, total };
 }
 
 function lineCogs(
@@ -60,13 +76,27 @@ export function profitAndLoss(state: BooksState, from: string, to: string) {
   const grossProfit = Math.round((income - cogs) * 100) / 100;
 
   const expensesList = state.expenses.filter((e) => e.status === 'paid' && inRange(e.date));
-  const expenses = Math.round(expensesList.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+  const cashExpenses = expensesList.reduce((s, e) => s + e.amount, 0);
+
+  // Accrual: vendor bills count by bill date (not payment date), like QBO.
+  const billExpensesList = (state.bills ?? []).filter(
+    (b) => b.status !== 'void' && inRange(b.date),
+  );
+  const billExpenses = billExpensesList.reduce((s, b) => s + b.subtotal, 0);
+  const expenses = Math.round((cashExpenses + billExpenses) * 100) / 100;
 
   const byCategory = new Map<string, number>();
   for (const e of expensesList) {
     const acct = state.accounts.find((a) => a.id === e.categoryAccountId);
     const name = acct?.name ?? 'Uncategorized';
     byCategory.set(name, (byCategory.get(name) ?? 0) + e.amount);
+  }
+  for (const bill of billExpensesList) {
+    for (const line of bill.lines) {
+      const acct = state.accounts.find((a) => a.id === line.categoryAccountId);
+      const name = acct?.name ?? 'Uncategorized';
+      byCategory.set(name, (byCategory.get(name) ?? 0) + line.amount);
+    }
   }
 
   const byIncome = new Map<string, number>();
@@ -176,15 +206,29 @@ export function salesByProduct(state: BooksState, from: string, to: string) {
 
 export function spendByVendor(state: BooksState, from: string, to: string) {
   const inRange = (d: string) => d >= from && d <= to;
-  const map = new Map<string, { name: string; expenses: number; pos: number; total: number }>();
+  const map = new Map<
+    string,
+    { name: string; expenses: number; bills: number; pos: number; total: number }
+  >();
 
   for (const e of state.expenses.filter((x) => inRange(x.date))) {
     const key = e.payeeId || e.payeeName;
     const vendor = state.vendors.find((v) => v.id === e.payeeId);
     const name = vendor?.name ?? e.payeeName;
-    const cur = map.get(key) ?? { name, expenses: 0, pos: 0, total: 0 };
+    const cur = map.get(key) ?? { name, expenses: 0, bills: 0, pos: 0, total: 0 };
     cur.expenses += e.amount;
     cur.total += e.amount;
+    map.set(key, cur);
+  }
+
+  for (const bill of state.bills ?? []) {
+    if (bill.status === 'void' || !inRange(bill.date)) continue;
+    const vendor = state.vendors.find((v) => v.id === bill.vendorId);
+    const key = bill.vendorId;
+    const name = vendor?.name ?? 'Unknown vendor';
+    const cur = map.get(key) ?? { name, expenses: 0, bills: 0, pos: 0, total: 0 };
+    cur.bills += bill.total;
+    cur.total += bill.total;
     map.set(key, cur);
   }
 
@@ -193,7 +237,7 @@ export function spendByVendor(state: BooksState, from: string, to: string) {
     const vendor = state.vendors.find((v) => v.id === po.vendorId);
     const key = po.vendorId;
     const name = vendor?.name ?? 'Unknown vendor';
-    const cur = map.get(key) ?? { name, expenses: 0, pos: 0, total: 0 };
+    const cur = map.get(key) ?? { name, expenses: 0, bills: 0, pos: 0, total: 0 };
     cur.pos += po.total;
     cur.total += po.total;
     map.set(key, cur);
@@ -265,6 +309,25 @@ export function arAging(invoices: Invoice[], customers: BooksState['customers'])
   return { buckets, rows };
 }
 
+export function apAging(bills: Bill[], vendors: BooksState['vendors']) {
+  const open = unpaidBills(bills);
+  const buckets = { current: 0, d30: 0, d60: 0, d90: 0 };
+  const today = new Date();
+  const rows = open.map((bill) => {
+    const due = new Date(bill.dueDate + 'T12:00:00');
+    const days = Math.floor((today.getTime() - due.getTime()) / 86400000);
+    let bucket: keyof typeof buckets = 'current';
+    if (days <= 0) bucket = 'current';
+    else if (days <= 30) bucket = 'd30';
+    else if (days <= 60) bucket = 'd60';
+    else bucket = 'd90';
+    buckets[bucket] += bill.balance;
+    const vendor = vendors.find((v) => v.id === bill.vendorId);
+    return { bill, vendorName: vendor?.name ?? 'Unknown', days, bucket };
+  });
+  return { buckets, rows };
+}
+
 export function refreshBalances(state: BooksState): BooksState {
   const accounts = state.accounts.map((a) => ({ ...a }));
   const stock = state.stock ?? [];
@@ -279,6 +342,11 @@ export function refreshBalances(state: BooksState): BooksState {
   const ar = accounts.find((a) => a.type === 'accounts_receivable');
   if (ar) {
     ar.balance = unpaidInvoices(state.invoices).reduce((s, i) => s + i.balance, 0);
+  }
+
+  const ap = accounts.find((a) => a.type === 'accounts_payable');
+  if (ap) {
+    ap.balance = unpaidBills(state.bills ?? []).reduce((s, b) => s + b.balance, 0);
   }
 
   const taxPayable = accounts.find((a) => a.id === 'acc_sales_tax');
@@ -304,17 +372,15 @@ export function refreshBalances(state: BooksState): BooksState {
   }));
 
   const vendors = state.vendors.map((v) => {
-    const unpaid = state.expenses.filter(
+    const unpaidExpenses = state.expenses.filter(
       (e) => e.payeeId === v.id && e.status === 'pending',
     );
-    const openPos = (state.purchaseOrders ?? []).filter(
-      (po) => po.vendorId === v.id && (po.status === 'sent' || po.status === 'partial'),
-    );
+    const openBills = unpaidBills(state.bills ?? []).filter((b) => b.vendorId === v.id);
     return {
       ...v,
       balance:
-        unpaid.reduce((s, e) => s + e.amount, 0) +
-        openPos.reduce((s, po) => s + po.total, 0),
+        unpaidExpenses.reduce((s, e) => s + e.amount, 0) +
+        openBills.reduce((s, b) => s + b.balance, 0),
     };
   });
 
@@ -325,6 +391,8 @@ export function refreshBalances(state: BooksState): BooksState {
     stockTransfers: state.stockTransfers ?? [],
     stockMovements: state.stockMovements ?? [],
     payments: state.payments ?? [],
+    bills: state.bills ?? [],
+    billPayments: state.billPayments ?? [],
     purchaseOrders: state.purchaseOrders ?? [],
     quotes: state.quotes ?? [],
     salesReceipts: state.salesReceipts ?? [],
@@ -345,6 +413,20 @@ export function markOverdue(invoices: Invoice[]): Invoice[] {
       return { ...inv, status: 'overdue' as const };
     }
     return inv;
+  });
+}
+
+export function markBillsOverdue(bills: Bill[]): Bill[] {
+  const today = todayStr();
+  return (bills ?? []).map((bill) => {
+    if (
+      (bill.status === 'open' || bill.status === 'partial' || bill.status === 'overdue') &&
+      bill.dueDate < today &&
+      bill.balance > 0
+    ) {
+      return { ...bill, status: 'overdue' as const };
+    }
+    return bill;
   });
 }
 

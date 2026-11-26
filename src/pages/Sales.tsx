@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { unpaidInvoices } from '../lib/accounting';
 import { money, shortDate } from '../lib/format';
+import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
 
@@ -61,12 +62,16 @@ export function Sales() {
 
   return (
     <div>
+      <HubTabs tabs={salesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Sales</h1>
           <p>Invoices, estimates, and cash sales in one place.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/receive-payment">
+            Receive payment
+          </Link>
           <Link className="btn btn-ghost" to="/quotes?new=1">
             Estimate
           </Link>

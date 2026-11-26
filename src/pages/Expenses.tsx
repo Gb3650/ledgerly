@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { unpaidBills } from '../lib/accounting';
 import { money, shortDate, todayISO } from '../lib/format';
+import { HubTabs, expensesHubTabs } from '../components/HubTabs';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
@@ -81,34 +83,40 @@ export function Expenses() {
     setOpen(false);
   }
 
+  const openBills = unpaidBills(state.bills ?? []).reduce((s, b) => s + b.balance, 0);
+
   return (
     <div>
+      <HubTabs tabs={expensesHubTabs} />
       <div className="page-header">
         <div>
           <h1>Expenses</h1>
           <p>Track what you spend and keep categories clean for reports.</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          Add expense
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link className="btn btn-ghost" to="/bills?new=1">
+            Bill
+          </Link>
+          <button className="btn btn-primary" onClick={openNew}>
+            Add expense
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-3" style={{ marginBottom: 16 }}>
         <div className="panel stat">
           <div className="stat-label">Paid expenses</div>
           <div className="stat-value">{money(totalPaid)}</div>
-          <div className="stat-hint">All recorded payments</div>
+          <div className="stat-hint">Cash / card expenses</div>
         </div>
-        <div className="panel stat warning">
-          <div className="stat-label">To pay</div>
-          <div className="stat-value">
-            {money(
-              state.expenses
-                .filter((e) => e.status === 'pending')
-                .reduce((s, e) => s + e.amount, 0),
-            )}
+        <div className={`panel stat ${openBills ? 'warning' : ''}`}>
+          <div className="stat-label">Open bills</div>
+          <div className="stat-value">{money(openBills)}</div>
+          <div className="stat-hint">
+            <Link to="/pay-bills" style={{ color: 'var(--sea)', fontWeight: 700 }}>
+              Pay bills
+            </Link>
           </div>
-          <div className="stat-hint">Pending bills</div>
         </div>
         <div className="panel stat">
           <div className="stat-label">This month</div>
@@ -257,7 +265,7 @@ export function Expenses() {
                 onChange={(e) => setStatus(e.target.value as Expense['status'])}
               >
                 <option value="paid">Paid</option>
-                <option value="pending">Pending (bill)</option>
+                <option value="pending">Pending</option>
               </select>
             </div>
             <div className="field">
