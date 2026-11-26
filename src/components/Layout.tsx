@@ -78,6 +78,8 @@ const gearMenu = [
     label: 'YOUR COMPANY',
     items: [
       { to: '/settings', label: 'Account and settings' },
+      { to: '/settings#sales-tax', label: 'Sales tax' },
+      { to: '/recurring', label: 'Recurring transactions' },
       { to: '/accounts', label: 'Chart of accounts' },
       { to: '/products', label: 'Products and services' },
       { to: '/reconcile', label: 'Reconcile' },

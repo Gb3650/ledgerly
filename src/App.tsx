@@ -18,6 +18,7 @@ import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Quotes } from './pages/Quotes';
 import { ReceivePayment } from './pages/ReceivePayment';
 import { Reconcile } from './pages/Reconcile';
+import { Recurring } from './pages/Recurring';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { SalesAll } from './pages/SalesAll';
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="taxes" element={<Taxes />} />
             <Route path="accounts" element={<Accounts />} />
             <Route path="apps" element={<Apps />} />
+            <Route path="recurring" element={<Recurring />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

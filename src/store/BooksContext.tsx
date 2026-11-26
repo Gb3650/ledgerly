@@ -26,6 +26,8 @@ import {
 } from '../lib/inventory';
 import { addDaysISO, todayISO, uid } from '../lib/format';
 import type {
+  Account,
+  AccountType,
   Bill,
   BillLine,
   BooksState,
@@ -47,6 +49,15 @@ interface BooksContextValue {
   syncStatus: 'local' | 'cloud' | 'syncing' | 'error';
   resetSampleData: () => void;
   updateCompany: (patch: Partial<BooksState['company']>) => void;
+  saveAccount: (input: {
+    id?: string;
+    name: string;
+    type: AccountType;
+    detailType: string;
+    number: string;
+    isActive?: boolean;
+  }) => string;
+  updateAccount: (id: string, patch: Partial<Omit<Account, 'id' | 'balance'>>) => void;
   exportBooks: () => string;
   importBooks: (json: string) => boolean;
   addLocation: (l: Omit<Location, 'id'>) => string;
@@ -314,6 +325,61 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const updateCompany = useCallback(
     (patch: Partial<BooksState['company']>) => {
       commit((prev) => ({ ...prev, company: { ...prev.company, ...patch } }));
+    },
+    [commit],
+  );
+
+  const saveAccount = useCallback(
+    (input: {
+      id?: string;
+      name: string;
+      type: AccountType;
+      detailType: string;
+      number: string;
+      isActive?: boolean;
+    }) => {
+      const id = input.id ?? uid('acc');
+      commit((prev) => {
+        const existing = prev.accounts.find((a) => a.id === id);
+        if (existing) {
+          return {
+            ...prev,
+            accounts: prev.accounts.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    name: input.name.trim(),
+                    type: input.type,
+                    detailType: input.detailType.trim() || a.detailType,
+                    number: input.number.trim(),
+                    isActive: input.isActive ?? a.isActive,
+                  }
+                : a,
+            ),
+          };
+        }
+        const account: Account = {
+          id,
+          name: input.name.trim(),
+          type: input.type,
+          detailType: input.detailType.trim() || 'Detail',
+          number: input.number.trim(),
+          balance: 0,
+          isActive: input.isActive ?? true,
+        };
+        return { ...prev, accounts: [...prev.accounts, account] };
+      });
+      return id;
+    },
+    [commit],
+  );
+
+  const updateAccount = useCallback(
+    (id: string, patch: Partial<Omit<Account, 'id' | 'balance'>>) => {
+      commit((prev) => ({
+        ...prev,
+        accounts: prev.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+      }));
     },
     [commit],
   );
@@ -1620,6 +1686,8 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       syncStatus,
       resetSampleData,
       updateCompany,
+      saveAccount,
+      updateAccount,
       exportBooks,
       importBooks,
       addLocation,
@@ -1662,6 +1730,8 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       syncStatus,
       resetSampleData,
       updateCompany,
+      saveAccount,
+      updateAccount,
       exportBooks,
       importBooks,
       addLocation,

@@ -22,7 +22,10 @@ export function Taxes() {
             <li>1099 contractor center</li>
           </ul>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link className="btn btn-primary" to="/reports">
+            <Link className="btn btn-primary" to="/settings#sales-tax">
+              Sales tax settings
+            </Link>
+            <Link className="btn btn-ghost" to="/reports">
               View reports
             </Link>
             <Link className="btn btn-ghost" to="/accounts">
