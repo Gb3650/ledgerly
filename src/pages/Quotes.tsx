@@ -11,11 +11,13 @@ import type { Quote } from '../types';
 type LineDraft = { productId: string; description: string; qty: number; rate: number };
 
 export function Quotes() {
-  const { state, saveQuote, convertQuoteToInvoice } = useBooks();
+  const { state, saveQuote, convertQuoteToInvoice, setQuoteStatus } = useBooks();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Quote | null>(null);
+  const [tab, setTab] = useState<'all' | Quote['status']>('all');
+  const [query, setQuery] = useState('');
   const [customerId, setCustomerId] = useState(state.customers[0]?.id ?? '');
   const [locationId, setLocationId] = useState(state.locations.find((l) => l.isActive)?.id ?? '');
   const [date, setDate] = useState(todayISO());
@@ -25,13 +27,25 @@ export function Quotes() {
     { productId: '', description: '', qty: 1, rate: 0 },
   ]);
 
-  const list = useMemo(
-    () => [...state.quotes].sort((a, b) => b.date.localeCompare(a.date)),
-    [state.quotes],
-  );
+  const list = useMemo(() => {
+    let rows = [...state.quotes].sort((a, b) => b.date.localeCompare(a.date));
+    if (tab !== 'all') rows = rows.filter((q) => q.status === tab);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((quote) => {
+        const customer = state.customers.find((c) => c.id === quote.customerId);
+        return (
+          quote.number.includes(q) ||
+          customer?.name.toLowerCase().includes(q) ||
+          customer?.company?.toLowerCase().includes(q)
+        );
+      });
+    }
+    return rows;
+  }, [state.quotes, state.customers, tab, query]);
   const totals = invoiceTotals(lines);
   const canSave = customerId && lines.some((l) => l.description && l.qty > 0);
-  const locked = editing?.status === 'converted';
+  const locked = editing?.status === 'converted' || editing?.status === 'declined';
 
   function openNew() {
     setEditing(null);
@@ -118,6 +132,28 @@ export function Quotes() {
         </button>
       </div>
 
+      <div className="list-toolbar">
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          {(['all', 'draft', 'sent', 'accepted', 'converted', 'declined'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`tab ${tab === t ? 'active' : ''}`}
+              onClick={() => setTab(t)}
+            >
+              {t === 'all' ? 'All' : t}
+            </button>
+          ))}
+        </div>
+        <input
+          className="list-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by # or customer"
+          aria-label="Filter estimates"
+        />
+      </div>
+
       <div className="panel">
         <div className="table-wrap">
           <table className="data data-clickable">
@@ -156,16 +192,42 @@ export function Quotes() {
                     </td>
                     <td className="num">{money(q.total)}</td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 6,
+                          justifyContent: 'flex-end',
+                          flexWrap: 'wrap',
+                        }}
+                      >
                         <button className="btn btn-ghost btn-sm" onClick={() => openEdit(q)}>
                           Open
                         </button>
-                        {q.status !== 'converted' && q.status !== 'declined' ? (
-                          <button className="btn btn-primary btn-sm" onClick={() => onConvert(q)}>
-                            Convert to invoice
+                        {q.status === 'sent' || q.status === 'draft' ? (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setQuoteStatus(q.id, 'accepted')}
+                          >
+                            Accept
                           </button>
+                        ) : null}
+                        {q.status !== 'converted' && q.status !== 'declined' ? (
+                          <>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setQuoteStatus(q.id, 'declined')}
+                            >
+                              Decline
+                            </button>
+                            <button className="btn btn-primary btn-sm" onClick={() => onConvert(q)}>
+                              Convert to invoice
+                            </button>
+                          </>
                         ) : q.invoiceId ? (
-                          <Link className="btn btn-ghost btn-sm" to={`/invoices?open=${q.invoiceId}`}>
+                          <Link
+                            className="btn btn-ghost btn-sm"
+                            to={`/invoices?open=${q.invoiceId}`}
+                          >
                             View invoice
                           </Link>
                         ) : null}
@@ -178,7 +240,7 @@ export function Quotes() {
                 <tr>
                   <td colSpan={7} className="empty">
                     <div className="empty-cta">
-                      <div>No estimates yet.</div>
+                      <div>No estimates in this view.</div>
                       <button className="btn btn-primary" onClick={openNew}>
                         Create estimate
                       </button>
@@ -218,9 +280,75 @@ export function Quotes() {
             </>
           }
         >
-          {locked ? (
+          {editing?.status === 'converted' ? (
             <div className="info-banner" style={{ marginBottom: 14 }}>
               This estimate was converted to an invoice and is view-only.
+              {editing.invoiceId ? (
+                <>
+                  {' '}
+                  <Link to={`/invoices?open=${editing.invoiceId}`} className="linkish">
+                    Open invoice
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {editing?.status === 'declined' ? (
+            <div className="info-banner" style={{ marginBottom: 14 }}>
+              This estimate was declined. Reopen by saving as draft or sent.
+            </div>
+          ) : null}
+          {editing &&
+          (editing.status === 'sent' ||
+            editing.status === 'draft' ||
+            editing.status === 'accepted') ? (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              {editing.status !== 'accepted' ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setQuoteStatus(editing.id, 'accepted');
+                    setEditing({ ...editing, status: 'accepted' });
+                  }}
+                >
+                  Mark accepted
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setQuoteStatus(editing.id, 'declined');
+                  setEditing({ ...editing, status: 'declined' });
+                }}
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  onConvert(editing);
+                  setOpen(false);
+                }}
+              >
+                Convert to invoice
+              </button>
+            </div>
+          ) : null}
+          {editing?.status === 'declined' ? (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setQuoteStatus(editing.id, 'draft');
+                  setEditing({ ...editing, status: 'draft' });
+                }}
+              >
+                Reopen as draft
+              </button>
             </div>
           ) : null}
           <div className="form-grid two">

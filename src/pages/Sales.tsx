@@ -5,26 +5,71 @@ import { HubTabs, salesHubTabs } from '../components/HubTabs';
 import { StatusBadge } from '../components/StatusBadge';
 import { useBooks } from '../store/BooksContext';
 
-type Row = {
-  id: string;
-  date: string;
-  type: 'Invoice' | 'Sales receipt' | 'Estimate';
-  number: string;
-  customer: string;
-  status: string;
-  total: number;
-  balance: number;
-  href: string;
-};
-
+/** QBO Sales → Overview: money bar + recent activity */
 export function Sales() {
   const { state } = useBooks();
   const open = unpaidInvoices(state.invoices);
-  const paid = state.invoices.filter((i) => i.status === 'paid');
-  const draft = state.invoices.filter((i) => i.status === 'draft');
-  const receiptsTotal = (state.salesReceipts ?? []).reduce((s, r) => s + r.total, 0);
+  const overdue = open.filter((i) => i.status === 'overdue' || i.dueDate < new Date().toISOString().slice(0, 10));
+  const openNotOverdue = open.filter((i) => !overdue.some((o) => o.id === i.id));
+  const estimates = (state.quotes ?? []).filter(
+    (q) => q.status === 'draft' || q.status === 'sent' || q.status === 'accepted',
+  );
+  const recentlyPaid = [...state.invoices]
+    .filter((i) => i.status === 'paid')
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+  const recentPayments = [...state.payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
 
-  const sales: Row[] = [
+  const openAmt = openNotOverdue.reduce((s, i) => s + i.balance, 0);
+  const overdueAmt = overdue.reduce((s, i) => s + i.balance, 0);
+  const estimateAmt = estimates.reduce((s, q) => s + q.total, 0);
+  const paidAmt = recentlyPaid.reduce((s, i) => s + i.total, 0);
+  const unbilled = 0; // placeholder until delayed charges exist
+
+  const moneyBar = [
+    {
+      key: 'estimates',
+      label: 'Estimates',
+      amount: estimateAmt,
+      count: estimates.length,
+      href: '/quotes',
+      tone: '',
+    },
+    {
+      key: 'unbilled',
+      label: 'Unbilled activity',
+      amount: unbilled,
+      count: 0,
+      href: '/sales/all',
+      tone: '',
+    },
+    {
+      key: 'overdue',
+      label: 'Overdue',
+      amount: overdueAmt,
+      count: overdue.length,
+      href: '/invoices',
+      tone: 'danger',
+    },
+    {
+      key: 'open',
+      label: 'Open invoices',
+      amount: openAmt,
+      count: openNotOverdue.length,
+      href: '/invoices',
+      tone: 'warn',
+    },
+    {
+      key: 'paid',
+      label: 'Recently paid',
+      amount: paidAmt,
+      count: recentlyPaid.length,
+      href: '/sales/all?type=Invoice&status=paid',
+      tone: 'ok',
+    },
+  ];
+
+  const recent = [
     ...state.invoices.map((inv) => ({
       id: inv.id,
       date: inv.date,
@@ -58,7 +103,9 @@ export function Sales() {
       balance: 0,
       href: `/quotes`,
     })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
 
   return (
     <div>
@@ -84,32 +131,122 @@ export function Sales() {
         </div>
       </div>
 
-      <div className="grid grid-4" style={{ marginBottom: 16 }}>
-        <div className="panel stat">
-          <div className="stat-label">Open invoices</div>
-          <div className="stat-value">{money(open.reduce((s, i) => s + i.balance, 0))}</div>
-          <div className="stat-hint">{open.length} invoices</div>
+      <div className="money-bar" role="navigation" aria-label="Sales status">
+        {moneyBar.map((cell) => (
+          <Link key={cell.key} to={cell.href} className={`money-cell ${cell.tone}`}>
+            <div className="money-cell-label">{cell.label}</div>
+            <div className="money-cell-amount">{money(cell.amount)}</div>
+            <div className="money-cell-count">
+              {cell.count} {cell.count === 1 ? 'transaction' : 'transactions'}
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Open invoices</h2>
+            <Link className="btn btn-ghost btn-sm" to="/invoices">
+              View all
+            </Link>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                  <th className="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {open.slice(0, 6).map((inv) => {
+                  const customer = state.customers.find((c) => c.id === inv.customerId);
+                  return (
+                    <tr key={inv.id}>
+                      <td>
+                        <Link to={`/invoices?open=${inv.id}`} className="linkish">
+                          {customer?.name ?? '—'} · #{inv.number}
+                        </Link>
+                      </td>
+                      <td>{shortDate(inv.dueDate)}</td>
+                      <td>
+                        <StatusBadge status={inv.status} />
+                      </td>
+                      <td className="num">{money(inv.balance)}</td>
+                    </tr>
+                  );
+                })}
+                {open.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      No open invoices.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="panel stat positive">
-          <div className="stat-label">Paid invoices</div>
-          <div className="stat-value">{money(paid.reduce((s, i) => s + i.total, 0))}</div>
-          <div className="stat-hint">{paid.length} invoices</div>
-        </div>
-        <div className="panel stat">
-          <div className="stat-label">Cash sales</div>
-          <div className="stat-value">{money(receiptsTotal)}</div>
-          <div className="stat-hint">{state.salesReceipts?.length ?? 0} receipts</div>
-        </div>
-        <div className="panel stat warning">
-          <div className="stat-label">Drafts</div>
-          <div className="stat-value">{draft.length}</div>
-          <div className="stat-hint">Ready to send</div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Recent payments</h2>
+            <Link className="btn btn-ghost btn-sm" to="/receive-payment">
+              Receive payment
+            </Link>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice</th>
+                  <th>Method</th>
+                  <th className="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentPayments.map((p) => {
+                  const inv = state.invoices.find((i) => i.id === p.invoiceId);
+                  return (
+                    <tr key={p.id}>
+                      <td>{shortDate(p.date)}</td>
+                      <td>
+                        {inv ? (
+                          <Link to={`/invoices?open=${inv.id}`} className="linkish">
+                            #{inv.number}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>{p.method}</td>
+                      <td className="num">{money(p.amount)}</td>
+                    </tr>
+                  );
+                })}
+                {recentPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      No payments yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-head">
-          <h2>All sales</h2>
+          <h2>Recent sales</h2>
+          <Link className="btn btn-ghost btn-sm" to="/sales/all">
+            All sales
+          </Link>
         </div>
         <div className="table-wrap">
           <table className="data">
@@ -125,12 +262,12 @@ export function Sales() {
               </tr>
             </thead>
             <tbody>
-              {sales.map((row) => (
+              {recent.map((row) => (
                 <tr key={`${row.type}-${row.id}`}>
                   <td>{shortDate(row.date)}</td>
                   <td>{row.type}</td>
                   <td>
-                    <Link to={row.href} style={{ color: 'var(--sea)', fontWeight: 700 }}>
+                    <Link to={row.href} className="linkish">
                       #{row.number}
                     </Link>
                   </td>
@@ -142,7 +279,7 @@ export function Sales() {
                   <td className="num">{money(row.balance)}</td>
                 </tr>
               ))}
-              {sales.length === 0 ? (
+              {recent.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="empty">
                     No sales yet.

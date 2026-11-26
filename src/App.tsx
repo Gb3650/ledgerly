@@ -17,6 +17,7 @@ import { Quotes } from './pages/Quotes';
 import { ReceivePayment } from './pages/ReceivePayment';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
+import { SalesAll } from './pages/SalesAll';
 import { SalesReceipts } from './pages/SalesReceipts';
 import { Settings } from './pages/Settings';
 import { Taxes } from './pages/Taxes';
@@ -33,6 +34,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="banking" element={<Banking />} />
             <Route path="sales" element={<Sales />} />
+            <Route path="sales/all" element={<SalesAll />} />
             <Route path="invoices" element={<Invoices />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="sales-receipts" element={<SalesReceipts />} />

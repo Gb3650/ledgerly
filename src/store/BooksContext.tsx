@@ -101,6 +101,7 @@ interface BooksContextValue {
     lines: Omit<InvoiceLine, 'id' | 'amount'>[];
   }) => string;
   convertQuoteToInvoice: (quoteId: string) => string;
+  setQuoteStatus: (quoteId: string, status: Quote['status']) => void;
   saveSalesReceipt: (input: {
     id?: string;
     customerId?: string;
@@ -759,7 +760,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const convertQuoteToInvoice = useCallback(
     (quoteId: string) => {
       const quote = state.quotes.find((q) => q.id === quoteId);
-      if (!quote || quote.status === 'converted') return '';
+      if (!quote || quote.status === 'converted' || quote.status === 'declined') return '';
       const res = saveInvoice({
         customerId: quote.customerId,
         locationId: quote.locationId,
@@ -791,6 +792,20 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       return res.id;
     },
     [commit, saveInvoice, state.quotes],
+  );
+
+  const setQuoteStatus = useCallback(
+    (quoteId: string, status: Quote['status']) => {
+      if (status === 'converted') return;
+      commit((prev) => ({
+        ...prev,
+        quotes: prev.quotes.map((q) => {
+          if (q.id !== quoteId || q.status === 'converted') return q;
+          return { ...q, status };
+        }),
+      }));
+    },
+    [commit],
   );
 
   const saveSalesReceipt = useCallback(
@@ -1324,6 +1339,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       markInvoiceEmailed,
       saveQuote,
       convertQuoteToInvoice,
+      setQuoteStatus,
       saveSalesReceipt,
       addExpense,
       payExpense,
@@ -1360,6 +1376,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       markInvoiceEmailed,
       saveQuote,
       convertQuoteToInvoice,
+      setQuoteStatus,
       saveSalesReceipt,
       addExpense,
       payExpense,
