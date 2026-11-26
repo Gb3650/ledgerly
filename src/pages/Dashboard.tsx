@@ -1,6 +1,11 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { monthlyIncomeSeries, profitAndLoss, unpaidBills, unpaidInvoices } from '../lib/accounting';
+import {
+  monthlyIncomeSeries,
+  profitAndLoss,
+  unpaidBills,
+  unpaidInvoices,
+} from '../lib/accounting';
 import { inventoryMatrix } from '../lib/inventory';
 import { money, shortDate } from '../lib/format';
 import { QuickOrder } from '../components/QuickOrder';
@@ -28,7 +33,10 @@ export function Dashboard() {
     new Date(2026, m.month - 1, 1).toLocaleString('en-US', { month: 'short' }),
   );
   const incomeSeries = chartMonths.map((m) => m.income);
-  const maxIncome = Math.max(1, ...incomeSeries);
+  const expenseSeries = chartMonths.map((m) =>
+    Math.max(0, m.income - m.net),
+  );
+  const maxBar = Math.max(1, ...incomeSeries, ...expenseSeries);
 
   const catTotal = pl.byCategory.reduce((s, c) => s + c.amount, 0) || 1;
   const topCats = pl.byCategory.slice(0, 4);
@@ -40,88 +48,88 @@ export function Dashboard() {
   const colors = ['var(--sea)', 'var(--amber)', 'var(--sky)', 'var(--mist)'];
 
   return (
-    <div>
+    <div className="bo">
       <div className="page-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Profit, cash, inventory, and open invoices for {state.company.name}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link className="btn btn-ghost" to="/pay-bills">
-            {apBalance ? `Pay bills ${money(apBalance)}` : 'Pay bills'}
-          </Link>
-          <Link className="btn btn-ghost" to="/inventory">
-            {lowStock.length ? `${lowStock.length} low stock` : 'Inventory'}
-          </Link>
-          <Link className="btn btn-primary" to="/invoices?new=1">
-            Create invoice
-          </Link>
+          <h1>Business overview</h1>
+          <p>
+            {state.company.name} · This year
+            {lowStock.length ? ` · ${lowStock.length} items at reorder point` : ''}
+          </p>
         </div>
       </div>
 
-      <QuickOrder />
-
-      <div className="grid grid-4" style={{ marginBottom: 16 }}>
-        <div className="panel stat positive">
-          <div className="stat-label">Profit &amp; loss</div>
-          <div className="stat-value">{money(pl.net)}</div>
-          <div className="stat-hint">YTD net income</div>
-        </div>
-        <div className="panel stat">
-          <div className="stat-label">Gross profit</div>
-          <div className="stat-value">{money(pl.grossProfit)}</div>
-          <div className="stat-hint">
-            Sales {money(pl.income)} − COGS {money(pl.cogs)}
-          </div>
-        </div>
-        <div className={`panel stat ${apBalance ? 'warning' : ''}`}>
-          <div className="stat-label">Open bills (A/P)</div>
-          <div className="stat-value">{money(apBalance)}</div>
-          <div className="stat-hint">
-            {openPayables.length
-              ? `${openPayables.length} to pay`
-              : `Expenses YTD ${money(pl.expenses)}`}
-          </div>
-        </div>
-        <div className={`panel stat ${overdue.length ? 'warning' : ''}`}>
-          <div className="stat-label">Open invoices</div>
-          <div className="stat-value">{money(openBalance)}</div>
-          <div className="stat-hint">
-            {overdue.length ? `${overdue.length} overdue` : `${openInvoices.length} awaiting payment`}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-2" style={{ marginBottom: 16 }}>
-        <div className="panel">
+      <div className="bo-grid">
+        {/* Profit and Loss — QBO primary widget */}
+        <section className="panel bo-widget bo-span-2">
           <div className="panel-head">
-            <h2>Income</h2>
-            <Link to="/reports" style={{ color: 'var(--sea)', fontWeight: 600, fontSize: '0.85rem' }}>
+            <h2>Profit and Loss</h2>
+            <Link className="bo-link" to="/reports?r=pl">
               View report
             </Link>
           </div>
-          <div className="panel-pad">
-            <div className="chart-bars">
+          <div className="panel-pad bo-pl">
+            <div className="bo-pl-summary">
+              <div>
+                <div className="stat-label">Net income</div>
+                <div
+                  className="stat-value"
+                  style={{ color: pl.net >= 0 ? 'var(--sea)' : 'var(--coral)' }}
+                >
+                  {money(pl.net)}
+                </div>
+              </div>
+              <div className="bo-pl-breakdown">
+                <div>
+                  <span>Income</span>
+                  <strong>{money(pl.income)}</strong>
+                </div>
+                <div>
+                  <span>COGS</span>
+                  <strong>{money(pl.cogs)}</strong>
+                </div>
+                <div>
+                  <span>Expenses</span>
+                  <strong>{money(pl.expenses)}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="chart-bars bo-bars">
               {months.map((m, i) => (
                 <div className="chart-bar" key={m}>
-                  <div className="chart-bar-track">
+                  <div className="chart-bar-track bo-bar-pair">
                     <div
-                      className="fill"
-                      style={{ height: `${Math.max(8, (incomeSeries[i] / maxIncome) * 100)}%` }}
+                      className="fill bo-fill-income"
+                      style={{ height: `${Math.max(4, (incomeSeries[i] / maxBar) * 100)}%` }}
+                      title={`Income ${money(incomeSeries[i])}`}
+                    />
+                    <div
+                      className="fill bo-fill-expense"
+                      style={{ height: `${Math.max(4, (expenseSeries[i] / maxBar) * 100)}%` }}
+                      title={`Expenses ${money(expenseSeries[i])}`}
                     />
                   </div>
                   <div className="lbl">{m}</div>
                 </div>
               ))}
             </div>
+            <div className="bo-legend-inline">
+              <span>
+                <i className="bo-dot income" /> Income
+              </span>
+              <span>
+                <i className="bo-dot expense" /> Expenses
+              </span>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
+        {/* Expenses donut */}
+        <section className="panel bo-widget">
           <div className="panel-head">
             <h2>Expenses</h2>
-            <Link to="/expenses" style={{ color: 'var(--sea)', fontWeight: 600, fontSize: '0.85rem' }}>
-              See all
+            <Link className="bo-link" to="/reports?r=pl">
+              View report
             </Link>
           </div>
           <div className="donut-row">
@@ -136,6 +144,7 @@ export function Dashboard() {
               }
             />
             <div className="legend">
+              <div className="bo-expense-total">{money(pl.expenses)}</div>
               {topCats.length === 0 ? (
                 <div className="empty">No expenses yet</div>
               ) : (
@@ -143,7 +152,13 @@ export function Dashboard() {
                   <div className="legend-item" key={c.name}>
                     <div className="legend-left">
                       <span className="swatch" style={{ background: colors[i] }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {c.name}
                       </span>
                     </div>
@@ -153,15 +168,14 @@ export function Dashboard() {
               )}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="grid grid-2">
-        <div className="panel">
+        {/* Bank accounts */}
+        <section className="panel bo-widget">
           <div className="panel-head">
             <h2>Bank accounts</h2>
-            <Link to="/banking" style={{ color: 'var(--sea)', fontWeight: 600, fontSize: '0.85rem' }}>
-              Banking
+            <Link className="bo-link" to="/banking">
+              Go to Banking
             </Link>
           </div>
           <div className="panel-pad">
@@ -176,14 +190,30 @@ export function Dashboard() {
                 </div>
               </div>
             ))}
+            {banks.length === 0 ? <div className="empty">No bank accounts</div> : null}
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
+        {/* Invoices (A/R) */}
+        <section className="panel bo-widget">
           <div className="panel-head">
-            <h2>Invoices awaiting payment</h2>
-            <Link to="/invoices" style={{ color: 'var(--sea)', fontWeight: 600, fontSize: '0.85rem' }}>
-              All invoices
+            <h2>Invoices</h2>
+            <Link className="bo-link" to="/reports?r=ar">
+              A/R aging
+            </Link>
+          </div>
+          <div className="bo-widget-stat">
+            <div>
+              <div className="stat-label">Unpaid</div>
+              <div className={`stat-value ${overdue.length ? 'warn' : ''}`}>{money(openBalance)}</div>
+              <div className="stat-hint">
+                {overdue.length
+                  ? `${overdue.length} overdue · ${openInvoices.length} open`
+                  : `${openInvoices.length} awaiting payment`}
+              </div>
+            </div>
+            <Link className="btn btn-sm btn-ghost" to="/invoices?new=1">
+              Create invoice
             </Link>
           </div>
           <div className="table-wrap">
@@ -222,7 +252,71 @@ export function Dashboard() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
+
+        {/* Bills (A/P) */}
+        <section className="panel bo-widget">
+          <div className="panel-head">
+            <h2>Bills</h2>
+            <Link className="bo-link" to="/reports?r=ap">
+              A/P aging
+            </Link>
+          </div>
+          <div className="bo-widget-stat">
+            <div>
+              <div className="stat-label">Unpaid</div>
+              <div className={`stat-value ${apBalance ? 'warn' : ''}`}>{money(apBalance)}</div>
+              <div className="stat-hint">
+                {openPayables.length
+                  ? `${openPayables.length} to pay`
+                  : 'No open bills'}
+              </div>
+            </div>
+            <Link className="btn btn-sm btn-ghost" to="/pay-bills">
+              Pay bills
+            </Link>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Vendor</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                  <th className="num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openPayables.slice(0, 5).map((bill) => {
+                  const vendor = state.vendors.find((v) => v.id === bill.vendorId);
+                  return (
+                    <tr key={bill.id}>
+                      <td>#{bill.number}</td>
+                      <td>{vendor?.name}</td>
+                      <td>{shortDate(bill.dueDate)}</td>
+                      <td>
+                        <StatusBadge status={bill.status} />
+                      </td>
+                      <td className="num">{money(bill.balance)}</td>
+                    </tr>
+                  );
+                })}
+                {openPayables.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="empty">
+                      No bills to pay.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <QuickOrder />
       </div>
     </div>
   );
